@@ -331,4 +331,27 @@ class Convert {
 	public static function nl2os($data, $nl = PHP_EOL) {
 		return preg_replace('~\R~u', $nl, $data);
 	}
+
+	/**
+	 * 
+	**/
+    public static function raw2urlatt($string, $validSchemas = array('http', 'https')) {
+        $string =  urlencode($string);
+        $allow = array(
+            '/%2F/' => '/',
+            '/%3F/' => '?',
+            '/%3D/' => '=',
+            '/%23/' => '#',
+            '/%26/' => '&amp;',
+            '/%40/' => '@',
+            '/\/\/([\.a-zA-Z0-9]+)%3A([0-9]+)/' => '//$1:$2',
+        );
+        if(!empty($validSchemas)) {
+            foreach($validSchemas as $schema) {
+                $allow['/^' . $schema . '%3A/'] = $schema . ':';
+            }
+        }
+
+        return preg_replace(array_keys($allow), $allow, $string);
+    }
 }

@@ -186,4 +186,23 @@ class ConvertTest extends SapphireTest {
 			);
 		}
 	}
+
+	
+	public function testRaw2urlatt() {
+		$string = "http://www.silverstripe.org";
+		$this->assertEquals(Convert::raw2urlatt($string), $string);
+
+		$string = "http://www.silverstripe.org/?flush=1";
+		$this->assertEquals(Convert::raw2urlatt($string), $string);
+
+		$string = 'https://www.silverstripe.org:80/test/?flush=1#anchor';
+		$this->assertEquals(Convert::raw2urlatt($string), $string);
+
+		$string = "Javascript:alert(1)";
+		$this->assertNotEquals(Convert::raw2urlatt($string), $string);
+		$this->assertEquals(substr(Convert::raw2urlatt($string), 0, 13), 'Javascript%3A');
+
+		$string = 'mailto:test@silverstripe.com';
+		$this->assertEquals(Convert::raw2urlatt($string, array('mailto')), $string);
+	}
 }
