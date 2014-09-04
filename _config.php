@@ -45,3 +45,8 @@ Deprecation::notification_version('3.2.0');
 
 // TODO Remove once new ManifestBuilder with submodule support is in place
 require_once('admin/_config.php');
+
+// Testing
+$adapter = new \League\Flysystem\Adapter\Local(ASSETS_DIR);
+$filesystemBackend = new \League\Flysystem\Filesystem($adapter);
+$filesystem = new Filesystem($filesystemBackend);
