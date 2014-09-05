@@ -151,8 +151,6 @@ class Filesystem extends Object implements FilesystemInterface {
 		return $this->getBackend()->addPlugin($plugin);
 	}
 
-
-
 	/**
 	 * @deprecated 3.3 makeFolder is deprecated. Please use xxx
 	 * 

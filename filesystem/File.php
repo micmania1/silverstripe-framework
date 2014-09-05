@@ -74,7 +74,7 @@
  * @method File Parent() Returns parent File
  * @method Member Owner() Returns Member object of file owner.
  */
-class File extends DataObject {
+class File extends DataObject implements FileInterface {
 
 	private static $default_sort = "\"Name\"";
 

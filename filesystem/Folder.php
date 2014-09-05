@@ -17,7 +17,7 @@
  * @package framework
  * @subpackage filesystem
  */
-class Folder extends File {
+class Folder extends File implements FolderInterface {
 
 	private static $singular_name = "Folder";
 
