@@ -1,4 +1,7 @@
 <?php
+
+use \SilverStripe\Framework\Filesystem\FilesystemInterface;
+
 /**
  * This class handles the representation of a file on the filesystem within the framework.
  * Most of the methods also handle the {@link Folder} subclass.
@@ -174,12 +177,39 @@ class File extends DataObject {
 	private static $update_filesystem = true;
 
 	/**
+	 * @config
+	 * @var Array Only use lowercase extensions in here.
+	 */
+	private static $class_for_file_extension = array(
+		'*' => 'File',
+		'jpg' => 'Image',
+		'jpeg' => 'Image',
+		'png' => 'Image',
+		'gif' => 'Image',
+	);
+
+	/**
 	 * Cached result of a "SHOW FIELDS" call
 	 * in instance_get() for performance reasons.
 	 *
 	 * @var array
 	 */
 	protected static $cache_file_fields = null;
+
+
+	/**
+	 * @var array
+	 */
+	private static $dependencies = array(
+		'filesystem' => '%$\SilverStripe\Framework\Filesystem\Filesystem'
+	);
+
+
+	/**
+	 * @var FilesystemInterface
+	 */
+	public $filesystem;
+
 
 	/**
 	 * Replace "[file_link id=n]" shortcode with an anchor tag or link to the file.
@@ -208,7 +238,7 @@ class File extends DataObject {
 			if($record instanceof File) {
 				foreach(array(
 					'class' => 'file',
-					'data-type' => $record->getExtension(),
+					'data-type' => $record->getFileExtension(),
 					'data-size' => $record->getSize()
 				) as $name => $value) {
 					$attrs .= sprintf('%s="%s" ', $name, $value);
@@ -246,6 +276,79 @@ class File extends DataObject {
 		}
 
 		return $item;
+	}
+
+
+	/**
+	 * Maps a {@link File} subclass to a specific extension.
+	 * By default, files with common image extensions will be created
+	 * as {@link Image} instead of {@link File} when using
+	 * {@link Folder::constructChild}, {@link Folder::addUploadToFolder}),
+	 * and the {@link Upload} class (either directly or through {@link FileField}).
+	 * For manually instanciated files please use this mapping getter.
+	 *
+	 * Caution: Changes to mapping doesn't apply to existing file records in the database.
+	 * Also doesn't hook into {@link Object::getCustomClass()}.
+	 *
+	 * @param String File extension, without dot prefix. Use an asterisk ('*')
+	 * to specify a generic fallback if no mapping is found for an extension.
+	 * @return String Classname for a subclass of {@link File}
+	 */
+	public static function get_class_for_file_extension($ext) {
+		$map = array_change_key_case(self::config()->class_for_file_extension, CASE_LOWER);
+		return (array_key_exists(strtolower($ext), $map)) ? $map[strtolower($ext)] : $map['*'];
+	}
+
+
+	/**
+	 * See {@link get_class_for_file_extension()}.
+	 *
+	 * @param String|array
+	 * @param String
+	 */
+	public static function set_class_for_file_extension($exts, $class) {
+		if(!is_array($exts)) $exts = array($exts);
+
+		foreach($exts as $ext) {
+			if(!is_subclass_of($class, 'File')) {
+				throw new InvalidArgumentException(
+					sprintf('Class "%s" (for extension "%s") is not a valid subclass of File', $class, $ext)
+				);
+			}
+			self::config()->class_for_file_extension = array($ext => $class);
+		}
+	}
+
+
+//	public function __construct($record = null, $isSingleton = false, $model = null) {
+//		trigger_error(':(');
+//		exit;
+//	}
+
+
+	/**
+	 * @return FilesystemInterface
+	 */
+	public function getFilesystem() {
+		// When 'new File()' is used the filesystem won't be initialized.
+		// We need to do this manually whilst maintaining injection dependencies.
+		if(!$this->filesystem) {
+			$dependencies = $this->config()->get('dependencies');
+			if(is_array($dependencies) && isset($dependencies['filesystem'])) {
+				$filesystem = Injector::inst()->convertServiceProperty($dependencies['filesystem']);
+				$this->setFilesystem($filesystem);
+			}
+		}
+		return $this->filesystem;
+	}
+
+	/**
+	 * @param FilesystemInterface $filesystem
+	 *
+	 * @return FilesystemInterface
+	 */
+	public function setFilesystem(FilesystemInterface $filesystem) {
+		return $this->filesystem = $filesystem;
 	}
 
 	/**
@@ -293,8 +396,12 @@ class File extends DataObject {
 		// ensure that the record is synced with the filesystem before deleting
 		$this->updateFilesystem();
 
-		if($this->Filename && $this->Name && file_exists($this->getFullPath()) && !is_dir($this->getFullPath())) {
-			unlink($this->getFullPath());
+		if($this->Filename
+			&& $this->Name
+			&& $this->getFilesystem()->isFile($this->getFullPath())
+			&& !$this->getFilesystem()->isDir($this->getFullPath())
+		) {
+			$this->getFilesystem()->delete($this->getFullPath());
 		}
 	}
 
@@ -455,7 +562,7 @@ class File extends DataObject {
 	 * @return String
 	 */
 	public function appCategory() {
-		return self::get_app_category($this->getExtension());
+		return self::get_app_category($this->getFileExtension());
 	}
 
 	public function CMSThumbnail() {
@@ -470,12 +577,12 @@ class File extends DataObject {
 	 * @return String
 	 */
 	public function Icon() {
-		$ext = strtolower($this->getExtension());
-		if(!Director::fileExists(FRAMEWORK_DIR . "/images/app_icons/{$ext}_32.gif")) {
+		$ext = strtolower($this->getFileExtension());
+		if(!$this->getFilesystem()->isFile(FRAMEWORK_DIR . "/images/app_icons/{$ext}_32.gif")) {
 			$ext = $this->appCategory();
 		}
 
-		if(!Director::fileExists(FRAMEWORK_DIR . "/images/app_icons/{$ext}_32.gif")) {
+		if(!$this->getFilesystem()->isFile(FRAMEWORK_DIR . "/images/app_icons/{$ext}_32.gif")) {
 			$ext = "generic";
 		}
 
@@ -551,29 +658,23 @@ class File extends DataObject {
 		// If the file or folder didn't exist before, don't rename - its created
 		if(!$pathBefore) return;
 
+		// TODO: Filesystem: Replace Director::getAbsFile usage
 		$pathBeforeAbs = Director::getAbsFile($pathBefore);
 		$pathAfterAbs = Director::getAbsFile($pathAfter);
-
-		// TODO Fix Filetest->testCreateWithFilenameWithSubfolder() to enable this
-		// // Create parent folders recursively in database and filesystem
-		// if(!is_a($this, 'Folder')) {
-		// 	$folder = Folder::findOrMake(dirname($pathAfterAbs));
-		// 	if($folder) $this->ParentID = $folder->ID;
-		// }
 
 		// Check that original file or folder exists, and rename on filesystem if required.
 		// The folder of the path might've already been renamed by Folder->updateFilesystem()
 		// before any filesystem update on contained file or subfolder records is triggered.
-		if(!file_exists($pathAfterAbs)) {
+		if(!$this->getFilesystem()->has($pathAfterAbs)) {
 			if(!is_a($this, 'Folder')) {
 				// Only throw a fatal error if *both* before and after paths don't exist.
-				if(!file_exists($pathBeforeAbs)) {
+				if(!$this->getFilesystem()->has($pathBeforeAbs)) {
 					throw new Exception("Cannot move $pathBeforeAbs to $pathAfterAbs - $pathBeforeAbs doesn't exist");
 				}
 
 				// Check that target directory (not the file itself) exists.
 				// Only check if we're dealing with a file, otherwise the folder will need to be created
-				if(!file_exists(dirname($pathAfterAbs))) {
+				if(!$this->getFilesystem()->isDir(dirname($pathAfterAbs))) {
 					throw new Exception("Cannot move $pathBeforeAbs to $pathAfterAbs - Directory " . dirname($pathAfter)
 						. " doesn't exist");
 				}
@@ -632,7 +733,7 @@ class File extends DataObject {
 
 		// If it's changed, check for duplicates
 		if($oldName && $oldName != $name) {
-			$base = pathinfo($name, PATHINFO_BASENAME);
+			$base = basename($name);;
 			$ext = self::get_file_extension($name);
 			$suffix = 1;
 
@@ -690,7 +791,7 @@ class File extends DataObject {
 	 * @return string
 	 */
 	public function getAbsoluteURL() {
-		return Director::absoluteURL($this->getURL());
+		return $this->getFilesystem()->getAbsoluteUrl($this->getFilename());
 	}
 
 	/**
@@ -700,7 +801,7 @@ class File extends DataObject {
 	 * @return string
 	 */
 	public function getURL() {
-		return Controller::join_links(Director::baseURL(), $this->getFilename());
+		return $this->getFilesystem()->getUrl($this->getFilename());
 	}
 
 	/**
@@ -744,8 +845,10 @@ class File extends DataObject {
 
 	/**
 	 * @todo Coupling with cms module, remove this method.
+	 *  - This shouldn't exist at all. This kind of functionality belongs in a controller.
 	 */
 	public function DeleteLink() {
+		Deprecation::notice('3.2', 'Delete link is deprecated.');
 		return Director::absoluteBaseURL()."admin/assets/removefile/".$this->ID;
 	}
 
@@ -769,17 +872,19 @@ class File extends DataObject {
 		$this->setField('Name', basename($val));
 	}
 
+
+	public function getExtension() {
+		Deprecation::notice('3.2', 'getExtension is deprecated. Use getFileExtension instead.');
+		return $this->getFileExtension();
+	}
+
 	/**
 	 * Returns the file extension
 	 *
-	 * @todo This overrides getExtension() in DataObject, but it does something completely different.
-	 * This should be renamed to getFileExtension(), but has not been yet as it may break
-	 * legacy code.
-	 *
 	 * @return String
 	 */
-	public function getExtension() {
-		return self::get_file_extension($this->getField('Filename'));
+	public function getFileExtension() {
+		return $this->getFilesystem()->getFileExtension($this->getField('Filename'));
 	}
 
 	/**
@@ -797,6 +902,7 @@ class File extends DataObject {
 	 * @return string
 	 */
 	public static function get_file_extension($filename) {
+		Deprecation::notice('3.2', 'get_file_extension has been deprecated.');
 		return pathinfo($filename, PATHINFO_EXTENSION);
 	}
 
@@ -831,7 +937,7 @@ class File extends DataObject {
 			'htm' => _t('File.HtlType', 'HTML file')
 		);
 
-		$ext = $this->getExtension();
+		$ext = $this->getFileExtension();
 
 		return isset($types[$ext]) ? $types[$ext] : 'unknown';
 	}
@@ -882,8 +988,8 @@ class File extends DataObject {
 	 * @return int
 	 */
 	public function getAbsoluteSize(){
-		if(file_exists($this->getFullPath())) {
-			$size = filesize($this->getFullPath());
+		if($this->getFilesystem()->isFile($this->getFullPath())) {
+			$size = $this->getFilesystem()->getFilesize($this->getFullPath());
 			return $size;
 		} else {
 			return 0;
@@ -916,7 +1022,7 @@ class File extends DataObject {
 		if($this->config()->apply_restrictions_to_admin || !Permission::check('ADMIN')) {
 			// Extension validation
 			// TODO Merge this with Upload_Validator
-			$extension = $this->getExtension();
+			$extension = $this->getFileExtension();
 			$allowed = array_map('strtolower', $this->config()->allowed_extensions);
 			if(!in_array(strtolower($extension), $allowed)) {
 				$exts =  $allowed;
@@ -937,57 +1043,6 @@ class File extends DataObject {
 		$result = new ValidationResult(true);
 		$this->extend('validate', $result);
 		return $result;
-	}
-
-	/**
-	 * @config
-	 * @var Array Only use lowercase extensions in here.
-	 */
-	private static $class_for_file_extension = array(
-		'*' => 'File',
-		'jpg' => 'Image',
-		'jpeg' => 'Image',
-		'png' => 'Image',
-		'gif' => 'Image',
-	);
-
-	/**
-	 * Maps a {@link File} subclass to a specific extension.
-	 * By default, files with common image extensions will be created
-	 * as {@link Image} instead of {@link File} when using
-	 * {@link Folder::constructChild}, {@link Folder::addUploadToFolder}),
-	 * and the {@link Upload} class (either directly or through {@link FileField}).
-	 * For manually instanciated files please use this mapping getter.
-	 *
-	 * Caution: Changes to mapping doesn't apply to existing file records in the database.
-	 * Also doesn't hook into {@link Object::getCustomClass()}.
-	 *
-	 * @param String File extension, without dot prefix. Use an asterisk ('*')
-	 * to specify a generic fallback if no mapping is found for an extension.
-	 * @return String Classname for a subclass of {@link File}
-	 */
-	public static function get_class_for_file_extension($ext) {
-		$map = array_change_key_case(self::config()->class_for_file_extension, CASE_LOWER);
-		return (array_key_exists(strtolower($ext), $map)) ? $map[strtolower($ext)] : $map['*'];
-	}
-
-	/**
-	 * See {@link get_class_for_file_extension()}.
-	 *
-	 * @param String|array
-	 * @param String
-	 */
-	public static function set_class_for_file_extension($exts, $class) {
-		if(!is_array($exts)) $exts = array($exts);
-
-		foreach($exts as $ext) {
-			if(!is_subclass_of($class, 'File')) {
-				throw new InvalidArgumentException(
-					sprintf('Class "%s" (for extension "%s") is not a valid subclass of File', $class, $ext)
-				);
-			}
-			self::config()->class_for_file_extension = array($ext => $class);
-		}
 	}
 
 }
