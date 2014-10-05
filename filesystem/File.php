@@ -321,15 +321,6 @@ class File extends DataObject {
 	}
 
 	/**
-	 * @param FilesystemInterface $filesystem
-	 *
-	 * @return FilesystemInterface
-	 */
-	public function setFilesystem(FilesystemInterface $filesystem) {
-		return $this->filesystem = $filesystem;
-	}
-
-	/**
 	 * Just an alias function to keep a consistent API with SiteTree
 	 *
 	 * @return string The link to the file
