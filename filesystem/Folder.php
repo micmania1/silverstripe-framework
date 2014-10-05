@@ -1,4 +1,7 @@
 <?php
+
+use SilverStripe\Framework\Filesystem\FilesystemManager;
+
 /**
  * Represents a folder in the assets/ directory.
  * The folder path is stored in the "Filename" property.
@@ -46,8 +49,9 @@ class Folder extends File {
 	 */
 	public static function find_or_make($folderPath) {
 		// Create assets directory, if it is missing
-		if(!$this->getFilesystem()->has(ASSETS_PATH)) {
-			$this->getFilesystem()->createDir(ASSETS_PATH);
+		$filesystem = FilesystemManager::inst()->get(Config::inst()->get(get_called_class(), 'default_filesystem'));
+		if(!$filesystem->has(ASSETS_PATH)) {
+			$filesystem->createDir(ASSETS_PATH);
 		}
 
 		$folderPath = trim(Director::makeRelative($folderPath));
@@ -77,8 +81,8 @@ class Folder extends File {
 				$item->Title = $part;
 				$item->write();
 			}
-			if(!file_exists($item->getFullPath())) {
-				Filesystem::makeFolder($item->getFullPath());
+			if($this->getFilesystem()->has($item->getFullPath())) {
+				$this->getFilesystem()->createDir($item->getFullPath());
 			}
 			$parentID = $item->ID;
 		}
@@ -146,9 +150,12 @@ class Folder extends File {
 		$baseDir = $this->FullPath;
 
 		// @todo this shouldn't call die() but log instead
-		if($parentID && !$this->Filename) die($this->ID . " - " . $this->FullPath);
+		if($parentID && !$this->Filename) {
+			throw Exception("No Filename set on class '" . get_class($this) . "' : ID (" . $this->ID . "')");
+			return;
+		}
 
-		if(file_exists($baseDir)) {
+		if($this->getFilesystem()->isDir($baseDir)) {
 			$actualChildren = scandir($baseDir);
 			$ignoreRules = Filesystem::config()->sync_blacklisted_patterns;
 			$allowedExtensions = File::config()->allowed_extensions;
@@ -167,7 +174,7 @@ class Folder extends File {
 
 				// Check allowed extensions, unless admin users are allowed to bypass these exclusions
 				if($checkExtensions
-					&& ($extension = self::get_file_extension($actualChild))
+					&& ($extension = $this->getFIlesystem()->getFileExtension($actualChild))
 					&& !in_array(strtolower($extension), $allowedExtensions)
 				) {
 					$skip = true;
@@ -197,7 +204,7 @@ class Folder extends File {
 					$child = DataObject::get_by_id("File", $childID);
 				}
 
-				if( $child && is_dir($baseDir . $actualChild)) {
+				if( $child && $this->getFilesystem()->isDir($baseDir . $actualChild)) {
 					$childResult = $child->syncChildren();
 					$added += $childResult['added'];
 					$deleted += $childResult['deleted'];
@@ -282,7 +289,7 @@ class Folder extends File {
 		}
 
 		$file = $this->RelativePath . $file;
-		Filesystem::makeFolder(dirname("$base/$file"));
+		$this->getFilesystem()->createDir(dirname("$base/$file"));
 
 		$doubleBarrelledExts = array('.gz', '.bz', '.bz2');
 
@@ -299,7 +306,7 @@ class Folder extends File {
 		$origFile = $file;
 
 		$i = 1;
-		while(file_exists("$base/$file$ext")) {
+		while($this->getFilesystem()->has("$base/$file$ext")) {
 			$i++;
 			$oldFile = $file;
 

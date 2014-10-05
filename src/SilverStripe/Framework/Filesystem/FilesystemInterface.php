@@ -12,6 +12,14 @@ namespace SilverStripe\Framework\Filesystem;
 interface FilesystemInterface {
 
 	/**
+	 * Set the base path of our filesystem.
+	 *
+	 * @param $basePath string
+	 */
+	public function __construct($basePath);
+
+
+	/**
 	 * Checks to see if a file or folder exists.
 	 *
 	 * @param $path

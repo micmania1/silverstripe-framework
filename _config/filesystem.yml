@@ -1,0 +1,10 @@
+---
+name: filesystem
+---
+SilverStripe\Framework\Filesystem\FilesystemManager:
+  class: 'WTF'
+  filesystems:
+    default:
+      class: '%$\SilverStripe\Framework\Filesystem\Filesystem'
+      construct:
+        0: 'assets/'

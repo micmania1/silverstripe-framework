@@ -1,6 +1,7 @@
 <?php
 
-use \SilverStripe\Framework\Filesystem\FilesystemInterface;
+use \SilverStripe\Framework\Filesystem\FilesystemInterface,
+	\SilverStripe\Framework\Filesystem\FilesystemManager;
 
 /**
  * This class handles the representation of a file on the filesystem within the framework.
@@ -198,17 +199,9 @@ class File extends DataObject {
 
 
 	/**
-	 * @var array
-	 */
-	private static $dependencies = array(
-		'filesystem' => '%$\SilverStripe\Framework\Filesystem\Filesystem'
-	);
-
-
-	/**
 	 * @var FilesystemInterface
 	 */
-	public $filesystem;
+	private static $default_filesystem = 'default';
 
 
 	/**
@@ -320,26 +313,11 @@ class File extends DataObject {
 	}
 
 
-//	public function __construct($record = null, $isSingleton = false, $model = null) {
-//		trigger_error(':(');
-//		exit;
-//	}
-
-
 	/**
 	 * @return FilesystemInterface
 	 */
 	public function getFilesystem() {
-		// When 'new File()' is used the filesystem won't be initialized.
-		// We need to do this manually whilst maintaining injection dependencies.
-		if(!$this->filesystem) {
-			$dependencies = $this->config()->get('dependencies');
-			if(is_array($dependencies) && isset($dependencies['filesystem'])) {
-				$filesystem = Injector::inst()->convertServiceProperty($dependencies['filesystem']);
-				$this->setFilesystem($filesystem);
-			}
-		}
-		return $this->filesystem;
+		return FilesystemManager::inst()->get($this->config()->default_filesystem);
 	}
 
 	/**

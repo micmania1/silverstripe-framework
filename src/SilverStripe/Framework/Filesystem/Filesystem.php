@@ -2,12 +2,17 @@
 
 namespace SilverStripe\Framework\Filesystem;
 
-use \Controller,
-	\Director;
-
 class Filesystem extends \Object implements FilesystemInterface {
 
 	private static $folder_create_mask = 0777;
+
+
+	protected $basePath;
+
+
+	public function __construct($basePath) {
+		$this->basePath = realpath($basePath);
+	}
 
 	public function has($path) {
 		return file_exists($path);
@@ -60,11 +65,11 @@ class Filesystem extends \Object implements FilesystemInterface {
 	}
 
 	public function getAbsoluteUrl($fileName) {
-		return Director::absoluteUrl($this->getUrl($fileName));
+		return \Director::absoluteUrl($this->getUrl($fileName));
 	}
 
 	public function getUrl($fileName) {
-		return Controller::join_links(Director::baseURL(), $fileName);
+		return \Controller::join_links(\Director::baseURL(), $fileName);
 	}
 
 }
