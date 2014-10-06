@@ -81,8 +81,8 @@ class Folder extends File {
 				$item->Title = $part;
 				$item->write();
 			}
-			if($this->getFilesystem()->has($item->getFullPath())) {
-				$this->getFilesystem()->createDir($item->getFullPath());
+			if(FilesystemManager::inst()->has($item->getFullPath())) {
+				FilesystemManager::inst()->createDir($item->getFullPath());
 			}
 			$parentID = $item->ID;
 		}
@@ -157,6 +157,7 @@ class Folder extends File {
 
 		if($this->getFilesystem()->isDir($baseDir)) {
 			$actualChildren = scandir($baseDir);
+			// Todo: Get this config from somewhere sensible (maybe File?).
 			$ignoreRules = Filesystem::config()->sync_blacklisted_patterns;
 			$allowedExtensions = File::config()->allowed_extensions;
 			$checkExtensions = $this->config()->apply_restrictions_to_admin || !Permission::check('ADMIN');
@@ -243,10 +244,10 @@ class Folder extends File {
 	public function constructChild($name) {
 		// Determine the class name - File, Folder or Image
 		$baseDir = $this->FullPath;
-		if(is_dir($baseDir . $name)) {
+		if($this->getFilesystem()->isDir($baseDir . $name)) {
 			$className = "Folder";
 		} else {
-			$className = File::get_class_for_file_extension(pathinfo($name, PATHINFO_EXTENSION));
+			$className = File::get_class_for_file_extension($this->getFilesystem()->getFileExtension($baseDir . $name));
 		}
 
 		$ownerID = Member::currentUserID();
@@ -325,7 +326,7 @@ class Folder extends File {
 			// Update with the new image
 			return $this->constructChild(basename($file . $ext));
 		} else {
-			if(!file_exists($tmpFile['tmp_name'])) {
+			if(!$this->getFilesystem()->has($tmpFile['tmp_name'])) {
 				user_error("Folder::addUploadToFolder: '$tmpFile[tmp_name]' doesn't exist", E_USER_ERROR);
 			} else {
 				user_error("Folder::addUploadToFolder: Couldn't copy '$tmpFile[tmp_name]' to '$base/$file$ext'",
@@ -349,7 +350,7 @@ class Folder extends File {
 	public function onBeforeDelete() {
 		if($this->ID && ($children = $this->AllChildren())) {
 			foreach($children as $child) {
-				if(!$this->Filename || !$this->Name || !file_exists($this->getFullPath())) {
+				if(!$this->Filename || !$this->Name || !$this->getFilesystem()->has($this->getFullPath())) {
 					$child->setField('Name',null);
 					$child->Filename = null;
 				}
@@ -358,7 +359,7 @@ class Folder extends File {
 		}
 
 		// Do this after so a folder's contents are removed before we delete the folder.
-		if($this->Filename && $this->Name && file_exists($this->getFullPath())) {
+		if($this->Filename && $this->Name && $this->getFilesystem()->has($this->getFullPath())) {
 			$files = glob( $this->getFullPath() . '/*' );
 
 			if( !$files || ( count( $files ) == 1 && preg_match( '/\/_resampled$/', $files[0] ) ) )

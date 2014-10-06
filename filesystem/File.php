@@ -120,6 +120,8 @@ class File extends DataObject {
 	 * @config
 	 * @var array List of allowed file extensions, enforced through {@link validate()}.
 	 *
+	 * The default list of allowed_extensions can be found in _config/file.yml
+	 *
 	 * Note: if you modify this, you should also change a configuration file in the assets directory.
 	 * Otherwise, the files will be able to be uploaded but they won't be able to be served by the
 	 * webserver.
@@ -129,39 +131,15 @@ class File extends DataObject {
 	 *
 	 * Instructions for the change you need to make are included in a comment in the config file.
 	 */
-	private static $allowed_extensions = array(
-		'','ace','arc','arj','asf','au','avi','bmp','bz2','cab','cda','css','csv','dmg','doc','docx',
-		'flv','gif','gpx','gz','hqx','ico','jar','jpeg','jpg','js','kml', 'm4a','m4v',
-		'mid','midi','mkv','mov','mp3','mp4','mpa','mpeg','mpg','ogg','ogv','pages','pcx','pdf','pkg',
-		'png','pps','ppt','pptx','ra','ram','rm','rtf','sit','sitx','tar','tgz','tif','tiff',
-		'txt','wav','webm','wma','wmv','xls','xlsx','zip','zipx',
-	);
+	private static $allowed_extensions = array();
 
 	/**
+	 * Default app_categories can be found in _config/file.yml
+	 *
 	 * @config
 	 * @var array Category identifiers mapped to commonly used extensions.
 	 */
-	private static $app_categories = array(
-		'audio' => array(
-			"aif" ,"au" ,"mid" ,"midi" ,"mp3" ,"ra" ,"ram" ,"rm","mp3" ,"wav" ,"m4a" ,"snd" ,"aifc" ,"aiff" ,"wma",
-			"apl", "avr" ,"cda" ,"mp4" ,"ogg"
-		),
-		'mov' => array(
-			"mpeg" ,"mpg" ,"m1v" ,"mp2" ,"mpa" ,"mpe" ,"ifo" ,"vob","avi" ,"wmv" ,"asf" ,"m2v" ,"qt", "ogv", "webm"
-		),
-		'zip' => array(
-			"arc" ,"rar" ,"tar" ,"gz" ,"tgz" ,"bz2" ,"dmg" ,"jar","ace" ,"arj" ,"bz" ,"cab"
-		),
-		'image' => array(
-			"bmp" ,"gif" ,"jpg" ,"jpeg" ,"pcx" ,"tif" ,"png" ,"alpha","als" ,"cel" ,"icon" ,"ico" ,"ps"
-		),
-		'flash' => array(
-			'swf', 'fla'
-		),
-		'doc' => array(
-			'doc','docx','txt','rtf','xls','xlsx','pages', 'ppt','pptx','pps','csv', 'html','htm','xhtml', 'xml','pdf'
-		)
-	);
+	private static $app_categories = array();
 
 	/**
 	 * @config
@@ -214,9 +192,10 @@ class File extends DataObject {
 	public static function link_shortcode_handler($arguments, $content = null, $parser = null) {
 		if(!isset($arguments['id']) || !is_numeric($arguments['id'])) return;
 
-		$record = DataObject::get_by_id('File', $arguments['id']);
-
+		$record = File::get()->byId($arguments['id']);
 		if (!$record) {
+
+			// :( todo: burn it with fire.
 			if(class_exists('ErrorPage')) {
 				$record = ErrorPage::get()->filter("ErrorCode", 404)->first();
 			}
@@ -535,7 +514,7 @@ class File extends DataObject {
 	}
 
 	public function CMSThumbnail() {
-		return '<img src="' . $this->Icon() . '" />';
+		return '<img src="' . $this->Icon() . '" alt="' . Convert::raw2att($this->getFileExtension()) . '" />';
 	}
 
 	/**
@@ -547,10 +526,12 @@ class File extends DataObject {
 	 */
 	public function Icon() {
 		$ext = strtolower($this->getFileExtension());
+
+		// Todo: This probably needs to be replaced with a different filesystem with a different
+		// base directory.
 		if(!$this->getFilesystem()->isFile(FRAMEWORK_DIR . "/images/app_icons/{$ext}_32.gif")) {
 			$ext = $this->appCategory();
 		}
-
 		if(!$this->getFilesystem()->isFile(FRAMEWORK_DIR . "/images/app_icons/{$ext}_32.gif")) {
 			$ext = "generic";
 		}

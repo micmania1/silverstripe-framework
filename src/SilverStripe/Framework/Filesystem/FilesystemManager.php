@@ -46,7 +46,7 @@ class FilesystemManager extends \Object {
 				}
 			}
 		}
-		throw new \Exception("No Filesystem exists with the name '" . $name . "'");
+		return false;
 	}
 
 }

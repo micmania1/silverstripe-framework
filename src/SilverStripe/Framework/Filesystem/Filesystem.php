@@ -14,6 +14,14 @@ class Filesystem extends \Object implements FilesystemInterface {
 		$this->basePath = realpath($basePath);
 	}
 
+	public function getAbsoluteBasePath() {
+		return Director::baseFolder() . $this->getRealtiveBasePath();
+	}
+
+	public function getRelativeBasePath() {
+		return realpath($this->basePath);
+	}
+
 	public function has($path) {
 		return file_exists($path);
 	}
