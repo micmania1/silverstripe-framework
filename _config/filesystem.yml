@@ -2,9 +2,6 @@
 name: filesystem
 ---
 
-File:
-
-
 SilverStripe\Framework\Filesystem\FilesystemManager:
   filesystems:
     default:

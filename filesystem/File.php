@@ -798,7 +798,7 @@ class File extends DataObject {
 	 *  - This shouldn't exist at all. This kind of functionality belongs in a controller.
 	 */
 	public function DeleteLink() {
-		Deprecation::notice('3.2', 'Delete link is deprecated.');
+		Deprecation::notice('3.3', 'Delete link is deprecated.');
 		return Director::absoluteBaseURL()."admin/assets/removefile/".$this->ID;
 	}
 
@@ -824,7 +824,7 @@ class File extends DataObject {
 
 
 	public function getExtension() {
-		Deprecation::notice('3.2', 'getExtension is deprecated. Use getFileExtension instead.');
+		Deprecation::notice('3.3', 'getExtension is deprecated. Use getFileExtension instead.');
 		return $this->getFileExtension();
 	}
 
@@ -852,8 +852,9 @@ class File extends DataObject {
 	 * @return string
 	 */
 	public static function get_file_extension($filename) {
-		Deprecation::notice('3.2', 'get_file_extension has been deprecated.');
-		return pathinfo($filename, PATHINFO_EXTENSION);
+		Deprecation::notice('3.3', 'File::get_file_extension() is deprecated.');
+		$filesystem = Config::inst()->get('File', 'default_filesystem');
+		return FilesystemManager::inst()->get($filesystem)->getFileExtension($filename);
 	}
 
 	/**

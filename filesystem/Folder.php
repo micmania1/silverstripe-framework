@@ -81,8 +81,10 @@ class Folder extends File {
 				$item->Title = $part;
 				$item->write();
 			}
-			if(FilesystemManager::inst()->has($item->getFullPath())) {
-				FilesystemManager::inst()->createDir($item->getFullPath());
+
+			$filesystem = Config::inst()->get(get_called_class(), 'default_filesystem');
+			if(FilesystemManager::inst()->get($filesystem)->has($item->getFullPath())) {
+				FilesystemManager::inst()->get($filesystem)->createDir($item->getFullPath());
 			}
 			$parentID = $item->ID;
 		}
