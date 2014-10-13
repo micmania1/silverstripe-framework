@@ -10,21 +10,21 @@ Folder:
       ParentID: =>Folder.folder1
 File:
    asdf:
-      Filename: assets/FileTest.txt
+      Filename: FileTest.txt
    gif:
-      Filename: assets/FileTest.gif
+      Filename: FileTest.gif
    pdf:
-      Filename: assets/FileTest.pdf
+      Filename: FileTest.pdf
    setfromname:
       Name: FileTest.png
       ParentID: 0
    subfolderfile:
-      Filename: assets/FileTest-subfolder/FileTestSubfolder.txt
+      Filename: FileTest-subfolder/FileTestSubfolder.txt
       ParentID: =>Folder.subfolder
    subfolderfile-setfromname:
       Name: FileTestSubfolder2.txt
       ParentID: =>Folder.subfolder
    file1-folder1:
-      Filename: assets/FileTest-folder1/File1.txt
+      Filename: FileTest-folder1/File1.txt
       Name: File1.txt
       ParentID: =>Folder.folder1

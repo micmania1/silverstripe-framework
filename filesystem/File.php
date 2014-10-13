@@ -799,8 +799,7 @@ class File extends DataObject {
 	public function getRelativePath() {
 		$filesystem = $this->getFilesystem();
 		if($this->ParentID) {
-			// Don't use the cache, the parent has just been changed
-			$p = DataObject::get_by_id('Folder', $this->ParentID, false);
+			$p = Folder::get()->byId($this->ParentID);
 			if($p && $p->exists()) {
 				return $p->getRelativePath() . $this->getField("Name");
 			} else {
@@ -967,8 +966,8 @@ class File extends DataObject {
 	 * @return int
 	 */
 	public function getAbsoluteSize(){
-		if($this->getFilesystem()->isFile($this->getFullPath())) {
-			$size = $this->getFilesystem()->getFilesize($this->getFullPath());
+		if($this->getFilesystem()->isFile($this->Filename)) {
+			$size = $this->getFilesystem()->getFilesize($this->Filename);
 			return $size;
 		} else {
 			return 0;

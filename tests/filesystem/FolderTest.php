@@ -1,4 +1,7 @@
 <?php
+
+use SilverStripe\Framework\Filesystem\Filesystem;
+
 /**
  * @author Ingo Schommer (ingo at silverstripe dot com)
  * @todo There's currently no way to save outside of assets/ folder
@@ -11,8 +14,54 @@ class FolderTest extends SapphireTest {
 	protected static $fixture_file = 'FileTest.yml';
 
 	public function getFilesystem() {
-		$filesystem = FilesystemManager::inst()->get('local');
-		return $filesystem->setBasePath('assets');
+		return new Filesystem('assets');
+	}
+
+	public function setUp() {
+		parent::setUp();
+
+		$filesystem = $this->getFilesystem();
+
+		// Create a test folders for each of the fixture references
+		$folderIDs = $this->allFixtureIDs('Folder');
+		foreach($folderIDs as $folderID) {
+			$folder = DataObject::get_by_id('Folder', $folderID);
+			if(!$filesystem->has($folder->Filename)) $filesystem->createDir($folder->Filename);
+		}
+
+		// Create a test files for each of the fixture references
+		$fileIDs = $this->allFixtureIDs('File');
+		foreach($fileIDs as $fileID) {
+			$file = DataObject::get_by_id('File', $fileID);
+			$fh = fopen($filesystem->getBasePath() . '/' . $file->Filename, "w");
+			fwrite($fh, str_repeat('x',1000000));
+			fclose($fh);
+		}
+	}
+
+	public function tearDown() {
+		$filesystem = $this->getFilesystem();
+		$testPath = 'FolderTest';
+		if($filesystem->isDir($testPath)) $filesystem->removeDir($testPath, true);
+
+		/* Remove the test files that we've created */
+		$fileIDs = $this->allFixtureIDs('File');
+		foreach($fileIDs as $fileID) {
+			$file = DataObject::get_by_id('File', $fileID);
+			if($file && $filesystem->has($file->Filename)) $filesystem->delete($file->Filename);
+		}
+
+		// Remove the test folders that we've crated
+		$folderIDs = $this->allFixtureIDs('Folder');
+		foreach($folderIDs as $folderID) {
+			$folder = DataObject::get_by_id('Folder', $folderID);
+			// Might have been removed during test
+			if($folder && $filesystem->isDir($folder->Filename)) {
+				$filesystem->removeDir($folder->Filename, true);
+			}
+		}
+
+		parent::tearDown();
 	}
 
 	public function testCreateFromNameAndParentIDSetsFilename() {
@@ -36,7 +85,7 @@ class FolderTest extends SapphireTest {
 	}
 
 	public function testFindOrMake() {
-//		$path = '/FolderTest/testFindOrMake/';
+//		$path = 'FolderTest/testFindOrMake/';
 //		$folder = Folder::find_or_make($path);
 //		$this->assertEquals($path, $folder->getRelativePath(),
 //			'Nested path information is correctly saved to database (with trailing slash)'
@@ -255,52 +304,6 @@ class FolderTest extends SapphireTest {
 //
 //		$this->assertFileExists($subfolderFile->getFullPath());
 //		$this->assertFalse(DataObject::get_by_id('File', $subfolderFileID));
-	}
-
-	public function setUp() {
-//		parent::setUp();
-//
-//		if(!file_exists(ASSETS_PATH)) mkdir(ASSETS_PATH);
-//
-//		// Create a test folders for each of the fixture references
-//		$folderIDs = $this->allFixtureIDs('Folder');
-//		foreach($folderIDs as $folderID) {
-//			$folder = DataObject::get_by_id('Folder', $folderID);
-//			if(!file_exists(BASE_PATH."/$folder->Filename")) mkdir(BASE_PATH."/$folder->Filename");
-//		}
-//
-//		// Create a test files for each of the fixture references
-//		$fileIDs = $this->allFixtureIDs('File');
-//		foreach($fileIDs as $fileID) {
-//			$file = DataObject::get_by_id('File', $fileID);
-//			$fh = fopen(BASE_PATH."/$file->Filename", "w");
-//			fwrite($fh, str_repeat('x',1000000));
-//			fclose($fh);
-//		}
-	}
-
-	public function tearDown() {
-//		$testPath = ASSETS_PATH . '/FolderTest';
-//		if(file_exists($testPath)) Filesystem::removeFolder($testPath);
-//
-//		/* Remove the test files that we've created */
-//		$fileIDs = $this->allFixtureIDs('File');
-//		foreach($fileIDs as $fileID) {
-//			$file = DataObject::get_by_id('File', $fileID);
-//			if($file && file_exists(BASE_PATH."/$file->Filename")) unlink(BASE_PATH."/$file->Filename");
-//		}
-//
-//		// Remove the test folders that we've crated
-//		$folderIDs = $this->allFixtureIDs('Folder');
-//		foreach($folderIDs as $folderID) {
-//			$folder = DataObject::get_by_id('Folder', $folderID);
-//			// Might have been removed during test
-//			if($folder && file_exists(BASE_PATH."/$folder->Filename")) {
-//				Filesystem::removeFolder(BASE_PATH."/$folder->Filename");
-//			}
-//		}
-//
-//		parent::tearDown();
 	}
 
 	public function testSyncedChildren() {

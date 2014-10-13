@@ -21,6 +21,10 @@ class FilesystemTest extends SapphireTest {
 		$relative = 'test/path/../';
 		$absolute = $this->getBaseFolder() . '/test';
 		$this->assertEquals($absolute, $this->getFilesystem()->makeAbsolute($relative));
+
+		$relative = 'FileTest-subfolder';
+		$absolute = $this->getBaseFolder() . '/' . $relative;
+		$this->assertEquals($absolute, $this->getFilesystem()->makeAbsolute($relative));
 	}
 
 
@@ -87,6 +91,15 @@ class FilesystemTest extends SapphireTest {
 
 		$path = $this->getBaseFolder() . '/test';
 		$this->assertFalse($this->getFilesystem()->isBasePath($path));
+	}
+
+
+	public function testIsAbsolute() {
+		$relative = 'FileTest-subfolder';
+		$absolute = $this->getFilesystem()->getBasePath() . '/' . $relative;
+
+		$this->assertFalse($this->getFilesystem()->isAbsolute($relative));
+		$this->assertTrue($this->getFilesystem()->isAbsolute($absolute));
 	}
 
 }

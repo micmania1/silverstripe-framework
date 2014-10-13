@@ -34,6 +34,7 @@ class FileTest extends SapphireTest {
 		$this->assertEquals('', $parser->parse('[file_link,id="text"]'));
 		$this->assertEquals('', $parser->parse('[file_link]Example Content[/file_link]'));
 
+		// todo: burn it with fire.
 		if(class_exists('ErrorPage')) {
 			$errorPage = ErrorPage::get()->filter('ErrorCode', 404)->First();
 			$this->assertEquals(

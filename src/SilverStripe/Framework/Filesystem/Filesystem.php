@@ -297,7 +297,8 @@ class Filesystem extends \Object implements FilesystemInterface {
 		return false;
 	}
 
-	public function getFilesize($path) {
+	public function getFileSize($path) {
+		die('here');
 		return filesize($this->sandboxPath($path));
 	}
 
@@ -315,7 +316,8 @@ class Filesystem extends \Object implements FilesystemInterface {
 	}
 
 	public function removeDir($path, $includeContent = false) {
-		if($this->isFolder($path)) {
+		if($this->isDir($path)) {
+			$path = $this->sandboxPath($path);
 			$content = array_diff(scandir($path), array('.', '..'));
 			if(count($content)) {
 				if($includeContent) {
