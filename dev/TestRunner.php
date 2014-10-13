@@ -238,7 +238,6 @@ class TestRunner extends Controller {
 						E_USER_ERROR);
 				}
 			}
-
 			$this->runTests($classNames, $coverage);
 		}
 	}

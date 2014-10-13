@@ -11,13 +11,6 @@ namespace SilverStripe\Framework\Filesystem;
  */
 interface FilesystemInterface {
 
-	/**
-	 * Set the base path of our filesystem.
-	 *
-	 * @param $basePath string
-	 */
-	public function __construct($basePath);
-
 
 	/**
 	 * Checks to see if a file or folder exists.
@@ -113,12 +106,28 @@ interface FilesystemInterface {
 
 
 	/**
-	 * Return the absolute URL.
+	 * Makes a path absolute.
 	 *
-	 * @param $filename
-	 *
-	 * @return mixed
+	 * @return string
 	 */
-	public function getAbsoluteUrl($filename);
+	public function makeAbsolute($path);
+
+
+	/**
+	 * Makes a path relative.
+	 *
+	 * @return string
+	 */
+	public function makeRelative($path);
+
+
+	/**
+	 * Level up one directory and return the new path.
+	 *
+	 * @param $path
+	 *
+	 * @return string
+	 */
+	public function levelUp($path);
 
 }

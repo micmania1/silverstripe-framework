@@ -177,9 +177,15 @@ class File extends DataObject {
 
 
 	/**
-	 * @var FilesystemInterface
+	 * @var string name of the filesystem
 	 */
-	private static $default_filesystem = 'default';
+	private static $default_filesystem = 'local';
+
+
+	/**
+	 * @var \SilverStripe\Framework\Filesystem\FilesystemInterface
+	 */
+	protected $filesystem;
 
 
 	/**
@@ -234,7 +240,7 @@ class File extends DataObject {
 		$filename = preg_replace('/_resampled\/[^-]+-/', '', $filename);
 
 		// Split to folders and the actual filename, and traverse the structure.
-		$parts = explode("/", $filename);
+		$parts = explode(DIRECTORY_SEPARATOR, $filename);
 		$parentID = 0;
 		$item = null;
 		foreach($parts as $part) {
@@ -296,7 +302,12 @@ class File extends DataObject {
 	 * @return FilesystemInterface
 	 */
 	public function getFilesystem() {
-		return FilesystemManager::inst()->get($this->config()->default_filesystem);
+		if($this->filesystem) return $this->filesystem;
+		$filesystem = $this->filesystem = FilesystemManager::inst()->get($this->config()->default_filesystem);
+		if(!$filesystem->isDir($filesystem->getBasePath())) {
+			$filesystem->createDir($filesystem->getBasePath());
+		}
+		return $filesystem;
 	}
 
 	/**
@@ -608,9 +619,8 @@ class File extends DataObject {
 		// If the file or folder didn't exist before, don't rename - its created
 		if(!$pathBefore) return;
 
-		// TODO: Filesystem: Replace Director::getAbsFile usage
-		$pathBeforeAbs = Director::getAbsFile($pathBefore);
-		$pathAfterAbs = Director::getAbsFile($pathAfter);
+		$pathBeforeAbs = $this->getFilesystem()->makeAbsolute($pathBefore);
+		$pathAfterAbs = $this->getFilesystem()->makeAbsolute($pathAfter);
 
 		// Check that original file or folder exists, and rename on filesystem if required.
 		// The folder of the path might've already been renamed by Folder->updateFilesystem()
@@ -624,13 +634,15 @@ class File extends DataObject {
 
 				// Check that target directory (not the file itself) exists.
 				// Only check if we're dealing with a file, otherwise the folder will need to be created
-				if(!$this->getFilesystem()->isDir(dirname($pathAfterAbs))) {
-					throw new Exception("Cannot move $pathBeforeAbs to $pathAfterAbs - Directory " . dirname($pathAfter)
+				$currentDir = $this->getFilesystem()->getCurrentDir($pathAfterAbs);
+				if(!$this->getFilesystem()->isDir($currentDir)) {
+					throw new Exception("Cannot move $pathBeforeAbs to $pathAfterAbs - Directory " . $currentDir
 						. " doesn't exist");
 				}
 			}
 
-			// Rename file or folder
+			// Rename file or
+			// todo: implement rename method
 			$success = rename($pathBeforeAbs, $pathAfterAbs);
 			if(!$success) throw new Exception("Cannot move $pathBeforeAbs to $pathAfterAbs");
 		}
@@ -735,13 +747,17 @@ class File extends DataObject {
 	}
 
 	/**
-	 * Gets the absolute URL accessible through the web.
+	 * Gets the absolute URL accessible through the web. This only works if the current filesystem implements
+	 * the getAbsoluteUrl method.
 	 *
 	 * @uses Director::absoluteBaseURL()
 	 * @return string
 	 */
 	public function getAbsoluteURL() {
-		return $this->getFilesystem()->getAbsoluteUrl($this->getFilename());
+		if(method_exists($this->getFilesystem(), 'getAbsoluteUrl')) {
+			return $this->getFilesystem()->getAbsoluteUrl($this->getFilename());
+		}
+		return $this->getURL();
 	}
 
 	/**
@@ -781,15 +797,27 @@ class File extends DataObject {
 	 * @return String
 	 */
 	public function getRelativePath() {
+		$filesystem = $this->getFilesystem();
 		if($this->ParentID) {
 			// Don't use the cache, the parent has just been changed
 			$p = DataObject::get_by_id('Folder', $this->ParentID, false);
-			if($p && $p->exists()) return $p->getRelativePath() . $this->getField("Name");
-			else return ASSETS_DIR . "/" . $this->getField("Name");
+			if($p && $p->exists()) {
+				return $p->getRelativePath() . $this->getField("Name");
+			} else {
+				return $filesystem->makeRelative(
+					$filesystem->getBasePath()
+					. $filesystem->getPathSeparator()
+					. $this->getField("Name")
+				);
+			}
 		} else if($this->getField("Name")) {
-			return ASSETS_DIR . "/" . $this->getField("Name");
+			return $filesystem->makeRelative(
+				$filesystem->getBasePath()
+				. $filesystem->getPathSeparator()
+				. $this->getField("Name")
+			);
 		} else {
-			return ASSETS_DIR;
+			return $filesystem->makeRelative($this->getBasePath());
 		}
 	}
 
@@ -807,7 +835,7 @@ class File extends DataObject {
 		if($this->getField('Filename')) {
 			return $this->getField('Filename');
 		} else {
-			return ASSETS_DIR . '/';
+			return $this->getRelativePath() . $this->getFilesystem()->getPathSeparator();
 		}
 	}
 

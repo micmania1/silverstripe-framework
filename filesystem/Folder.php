@@ -50,46 +50,55 @@ class Folder extends File {
 	public static function find_or_make($folderPath) {
 		// Create assets directory, if it is missing
 		$filesystem = FilesystemManager::inst()->get(Config::inst()->get(get_called_class(), 'default_filesystem'));
-		if(!$filesystem->has(ASSETS_PATH)) {
-			$filesystem->createDir(ASSETS_PATH);
+		if(!$filesystem->has($filesystem->getBasePath())) {
+			$filesystem->createDir($filesystem->getBasePath());
 		}
 
-		$folderPath = trim(Director::makeRelative($folderPath));
-		// replace leading and trailing slashes
-		$folderPath = preg_replace('/^\/?(.*)\/?$/', '$1', $folderPath);
-		$parts = explode("/",$folderPath);
+		// Make folder path relative.
+		$folderPath = $filesystem->makeRelative($folderPath);
 
-		$parentID = 0;
-		$item = null;
-		$filter = FileNameFilter::create();
-		foreach($parts as $part) {
-			if(!$part) continue; // happens for paths with a trailing slash
+		// Filter our filename.
+		$unsafe = $filesystem->getBaseName($folderPath);
+		$safe = FileNameFilter::create()->filter($unsafe);
 
-			// Ensure search includes folders with illegal characters removed, but
-			// err in favour of matching existing folders if $folderPath
-			// includes illegal characters itself.
-			$partSafe = $filter->filter($part);
-			$item = Folder::get()->filter(array(
-				'ParentID' => $parentID,
-				'Name' => array($partSafe, $part)
+		// Ensure we have a parent folder or that we're in the root directory.
+		$parentFolder = $filesystem->levelUp($folderPath);
+
+		if(!$filesystem->isBasePath($parentFolder)) {
+			$parent = self::find_or_make($parentFolder);
+		} else {
+			$parent = null;
+		}
+		$parentId = $parent ? $parent->ID : 0;
+
+		// Check to see if we have a record in the database.
+		$dbRecord = Folder::get()
+			->filter(array(
+				'ParentID' => $parentId,
+				'Name' => array($unsafe, $safe)
 			))->first();
-
-			if(!$item) {
-				$item = new Folder();
-				$item->ParentID = $parentID;
-				$item->Name = $partSafe;
-				$item->Title = $part;
-				$item->write();
+		if($dbRecord) {
+			// Ensure the folder actually exists
+			if(!$filesystem->isDir($dbRecord->Filename)) {
+				$filesystem->createDir($dbRecord->Filename);
 			}
-
-			$filesystem = Config::inst()->get(get_called_class(), 'default_filesystem');
-			if(FilesystemManager::inst()->get($filesystem)->has($item->getFullPath())) {
-				FilesystemManager::inst()->get($filesystem)->createDir($item->getFullPath());
-			}
-			$parentID = $item->ID;
+			return $dbRecord;
 		}
 
-		return $item;
+		// Create the new database record. $folder->Filename will be automatically
+		// populated by the parent folder and $folder->Name.
+		$folder = Folder::create();
+		$folder->Name = $safe;
+		$folder->Title = $unsafe;
+		$folder->ParentID = $parentId;
+		$folder->write();
+
+		// Ensure the directory exists on disk
+		if(!$filesystem->isDir($folder->getFullPath())) {
+			$filesystem->createDir($folder->getFullPath());
+		}
+
+		return $folder;
 	}
 
 	/**

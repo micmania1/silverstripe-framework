@@ -4,7 +4,8 @@ name: filesystem
 
 SilverStripe\Framework\Filesystem\FilesystemManager:
   filesystems:
-    default:
+    local:
       class: '%$\SilverStripe\Framework\Filesystem\Filesystem'
       construct:
         0: 'assets/'
+        1: 'assets/'
