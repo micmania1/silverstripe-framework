@@ -125,6 +125,7 @@ class Filesystem extends \Object implements FilesystemInterface {
 	 * @return string
 	 */
 	public function resolvePath($path) {
+		$orig = $path;
 		// Cleanup the path
 		$path = $this->isAbsolute($path) ? $path : $this->makeAbsolute($path);
 
@@ -145,12 +146,13 @@ class Filesystem extends \Object implements FilesystemInterface {
 				}
 				// todo: Symlinks? Probably do more bad than good if we resolve those.
 				// todo: We could introduce a setting which dictates how we treat symlinks?
-				// todo: eg. They could be blocked if defined by the user. By user, I mean developer.
+				// todo: eg. They could be blocked if defined by the developer.
 				array_push($final, $part);
 			}
 			return $this->getPathSeparator() . implode($this->getPathSeparator(), $final);
 		}
-		return $this->getBasePath();
+		// We have no directory parts - we must be in root.
+		return $this->getPathSeparator();
 	}
 
 
@@ -165,10 +167,10 @@ class Filesystem extends \Object implements FilesystemInterface {
 	 */
 	public function sandboxPath($path) {
 		$path = $this->resolvePath($path);
-		if(substr_compare($path, $this->getBasePath(), 0, strlen($this->getBasePath())) == 0) {
+		if($this->isSandboxed($path)) {
 			return $path;
 		}
-		throw new \Exception($path . ' is not within the current root.');
+		throw new \Exception($path . ' is not within the current filesystem root.');
 		return $this->getBasePath();
 	}
 
@@ -214,8 +216,8 @@ class Filesystem extends \Object implements FilesystemInterface {
 	 * @return bool
 	 */
 	public function isAbsolute($path) {
-		$base = $this->getBasePath();
-		return (substr($path, 0, strlen($base)) == $base);
+		if(strlen($path) == 0) return false;
+		return substr_compare($path, $this->getPathSeparator(), 0, 1) === 0;
 	}
 
 
@@ -232,17 +234,37 @@ class Filesystem extends \Object implements FilesystemInterface {
 
 
 	/**
+	 * Checks that the given path is sandboxed within the defined filesystem root.
+	 *
+	 * @param $path string
+	 *
+	 * @return string
+	 * @throws \Exception
+	 */
+	public function isSandboxed($path) {
+		$path = $this->resolvePath($path);
+		return (substr_compare($path, $this->getBasePath(), 0, strlen($this->getBasePath())) === 0);
+	}
+
+
+	/**
 	 * Returns the current directory of the given filename.
 	 *
 	 * @param $filename string
 	 *
 	 * @return string
-	 * @throws \Exception
 	 */
 	public function getCurrentDir($filename) {
 		$filename = $this->makeAbsolute($filename);
+
+		// If we're on a directory, return it.
 		if($this->isDir($filename)) return $this->sandboxPath($filename);
-		if(!$this->getFileExtension($filename)) return $this->sandboxPath($filename);
+		// If we're in a file, return its parent folder.
+		if($this->has($filename)) return $this->sandboxPath(dirname($filename));
+		// The file may not exist yet, so the above won't work. Here we're assuming anything with an extension
+		// is meant to be a file and anything without if a folder.
+		$ext = $this->getFileExtension($filename);
+		if(empty($ext)) return $this->sandboxPath($filename);
 
 		// Figure out the current directory - we're currently on a file.
 		$parts = explode($this->getPathSeparator(), $filename);
@@ -251,9 +273,33 @@ class Filesystem extends \Object implements FilesystemInterface {
 		return $this->sandboxPath($path);
 	}
 
-	
+
 	/**
-	 * Returns absolute url to the given filename
+	 * Returns the accessible url relative to the root. eg. /assets/file.txt
+	 *
+	 * @param $fileName
+	 *
+	 * @return string
+	 */
+	public function getUrl($fileName) {
+		return '/' . $this->getRelativeUrl($fileName);
+	}
+
+
+	/**
+	 * Returns the relative url to the given filename. eg. assets/file.txt
+	 *
+	 * @param $fileName
+	 *
+	 * @return string
+	 */
+	public function getRelativeUrl($fileName) {
+		return \Director::makeRelative($this->getAbsoluteUrl($fileName));
+	}
+
+
+	/**
+	 * Returns absolute url to the given filename. eg. http://example.com/assets/file.txt
 	 *
 	 * @param $fileName
 	 *
@@ -265,14 +311,27 @@ class Filesystem extends \Object implements FilesystemInterface {
 
 
 	/**
-	 * Returns the url to the given filename
+	 * Returns an array of file paths relative to the current filesystem root.
 	 *
-	 * @param $fileName
+	 * @param $path
+	 * @param bool $recursive
 	 *
-	 * @return string
+	 * @return array
 	 */
-	public function getUrl($fileName) {
-		return \Director::makeRelative($this->getAbsoluteUrl($fileName));
+	public function listContents($path, $recursive = false) {
+		$path = $this->resolvePath($path);
+		$files = array();
+
+		if($this->isSandboxed($path)) {
+			$iterator = $this->getDirectoryIterator($path, $recursive);
+
+			$files = array();
+			foreach($iterator as $file) {
+				if($file->isDot()) continue;
+				array_push($files, $this->makeRelative($file->getPathname()));
+			}
+		}
+		return $files;
 	}
 
 
@@ -298,12 +357,39 @@ class Filesystem extends \Object implements FilesystemInterface {
 	}
 
 	public function getFileSize($path) {
-		die('here');
-		return filesize($this->sandboxPath($path));
+		return filesize($this->sandboxPath());
 	}
 
 	public function getFileExtension($path) {
-		return pathinfo($this->sandboxPath($path), PATHINFO_EXTENSION);
+		$resolved = $this->resolvePath($path);
+		if($this->isSandboxed($resolved) && $this->isFile($resolved)) {
+			return pathinfo($this->sandboxPath($resolved), PATHINFO_EXTENSION);
+		}
+		// todo: File should not be here. Kill it.
+		$allowedExtensions = \File::config()->allowed_extensions;
+		$ext = null;
+		foreach($allowedExtensions as $extension) {
+			if(substr_compare($resolved, $extension, strlen($extension) * -1) === 0) {
+				$ext = $extension;
+				break;
+			}
+		}
+		return $ext;
+	}
+
+
+	public function getFilename($path) {
+		$path = $this->resolvePath($path);
+		if($this->isSandboxed($path)) {
+			if($this->isFile($path)) {
+				$info = pathinfo($path);
+				return $info['filename'] . '.' . $info['extension'];
+			} else {
+				$parts = explode($this->getPathSeparator(), $path);
+				return array_pop($parts);
+			}
+		}
+		return '';
 	}
 
 	public function createDir($path, $recursive = true, $config = array()) {

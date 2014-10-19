@@ -2,14 +2,16 @@
 
 class FilesystemTest extends SapphireTest {
 
+	protected $filesystem;
+
 	public function getFilesystem() {
-		$filesystem = new \SilverStripe\Framework\Filesystem\Filesystem('assets');
-		return $filesystem->setPathSeparator('/')->setBasePath($this->getBaseFolder());
+		if($this->filesystem) return $this->filesystem;
+		return $this->filesystem = new \SilverStripe\Framework\Filesystem\Filesystem('assets/', 'assets/');
 	}
 
 
 	public function getBaseFolder() {
-		return '/root/path/assets';
+		return $this->getFilesystem()->getBasePath();
 	}
 
 
@@ -47,6 +49,8 @@ class FilesystemTest extends SapphireTest {
 
 		$base = $this->getBaseFolder();
 		$this->assertEquals($base, $this->getFilesystem()->resolvePath($base));
+
+		$this->assertEquals('/', $this->getFilesystem()->resolvePath('/'));
 	}
 
 
@@ -62,7 +66,7 @@ class FilesystemTest extends SapphireTest {
 		$this->assertEquals('test/folder', $this->getFilesystem()->makeRelative($path));
 
 		// Same as above but with leading slash.
-		$path = '/test/folder';
+		$path = $this->getBaseFolder() . '/test/folder';
 		$this->assertEquals('test/folder', $this->getFilesystem()->makeRelative($path));
 
 		$path = $this->getBaseFolder() . '/allowed/../allowed/test';
@@ -70,15 +74,30 @@ class FilesystemTest extends SapphireTest {
 	}
 
 
+	public function testIsSandboxed() {
+		$path = $this->getBaseFolder() . '/test';
+		$this->assertTrue($this->getFilesystem()->isSandboxed($path));
+
+		$path = $this->getBaseFolder();
+		$this->assertTrue($this->getFilesystem()->isSandboxed($path));
+
+		$path = $this->getBaseFolder() . '/../';
+		$this->assertFalse($this->getFilesystem()->isSandboxed($path));
+
+		$path = $this->getbaseFolder() . '/../../../';
+		$this->assertFalse($this->getFilesystem()->isSandboxed($path));
+	}
+
+
 	public function testSandboxPath() {
 		$path = $this->getBaseFolder() . '/test';
 		$this->assertEquals($this->getBaseFolder() . '/test', $this->getFilesystem()->sandboxPath($path));
 
-		$path = '/root';
+		$path = 'root';
 		$this->assertEquals($this->getbaseFolder() . '/root', $this->getFilesystem()->sandboxPath($path));
 
 		$this->setExpectedException('Exception');
-		$this->getFilesystem()->sandboxPath($this->getbaseFolder() . '/../../../');
+		$this->getFilesystem()->sandboxPath($this->getBaseFolder() . '/../../../');
 	}
 
 
@@ -100,6 +119,25 @@ class FilesystemTest extends SapphireTest {
 
 		$this->assertFalse($this->getFilesystem()->isAbsolute($relative));
 		$this->assertTrue($this->getFilesystem()->isAbsolute($absolute));
+
+		$this->assertTrue($this->getFilesystem()->isAbsolute('/'));
+	}
+
+
+	public function testGetCurrentDir() {
+		$dir = 'test';
+		$this->assertEquals($this->getBaseFolder() . '/test', $this->getFilesystem()->getCurrentDir($dir));
+
+		$dir = 'test/Somefile.gif';
+		$this->assertEquals($this->getBaseFolder() . '/test', $this->getFilesystem()->getCurrentDir($dir));
+	}
+
+	public function testGetFileExtension() {
+		$path = 'test/Somefile.gif';
+		$this->assertEquals('gif', $this->getFilesystem()->getFileExtension($path));
+
+		$path = 'test/';
+		$this->assertNull($this->getFilesystem()->getFileExtension($path));
 	}
 
 }

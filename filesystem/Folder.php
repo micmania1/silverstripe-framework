@@ -48,7 +48,7 @@ class Folder extends File {
 	 * @return Folder|null
 	 */
 	public static function find_or_make($folderPath) {
-		// Create assets directory, if it is missing
+				// Create assets directory, if it is missing
 		$filesystem = FilesystemManager::inst()->get(Config::inst()->get(get_called_class(), 'default_filesystem'));
 		if(!$filesystem->has($filesystem->getBasePath())) {
 			$filesystem->createDir($filesystem->getBasePath());
@@ -72,30 +72,27 @@ class Folder extends File {
 		$parentId = $parent ? $parent->ID : 0;
 
 		// Check to see if we have a record in the database.
-		$dbRecord = Folder::get()
+		$folder = Folder::get()
 			->filter(array(
 				'ParentID' => $parentId,
 				'Name' => array($unsafe, $safe)
 			))->first();
-		if($dbRecord) {
-			// Ensure the folder actually exists
-			if(!$filesystem->isDir($dbRecord->Filename)) {
-				$filesystem->createDir($dbRecord->Filename);
-			}
-			return $dbRecord;
+		if(!$folder) {
+			// Create the new database record. $folder->Filename will be automatically
+			// populated by the parent folder and $folder->Name.
+			$folder = Folder::create();
+			$folder->Name = $safe;
+			$folder->Title = $unsafe;
+			$folder->ParentID = $parentId;
+			$folder->write();
+		}
+		if($folderPath == 'FolderTest/testFindOrMake/') {
+			die('here');
 		}
 
-		// Create the new database record. $folder->Filename will be automatically
-		// populated by the parent folder and $folder->Name.
-		$folder = Folder::create();
-		$folder->Name = $safe;
-		$folder->Title = $unsafe;
-		$folder->ParentID = $parentId;
-		$folder->write();
-
 		// Ensure the directory exists on disk
-		if(!$filesystem->isDir($folder->getFullPath())) {
-			$filesystem->createDir($folder->getFullPath());
+		if(!$filesystem->isDir($folder->getFilename())) {
+			$filesystem->createDir($folder->getFilename());
 		}
 
 		return $folder;
@@ -106,6 +103,7 @@ class Folder extends File {
 	 * folder.
 	 */
 	public function syncChildren() {
+		$filesystem = $this->getFilesystem();
 		$parentID = (int)$this->ID; // parentID = 0 on the singleton, used as the 'root node';
 		$added = 0;
 		$deleted = 0;
@@ -158,37 +156,38 @@ class Folder extends File {
 		if(!$parentID) $this->Filename = '';
 
 		// Iterate through the actual children, correcting the database as necessary
-		$baseDir = $this->FullPath;
+		$baseDir = $this->getFullPath();
 
-		// @todo this shouldn't call die() but log instead
 		if($parentID && !$this->Filename) {
 			throw Exception("No Filename set on class '" . get_class($this) . "' : ID (" . $this->ID . "')");
 			return;
 		}
 
-		if($this->getFilesystem()->isDir($baseDir)) {
-			$actualChildren = scandir($baseDir);
+		if($filesystem->isDir($baseDir)) {
+			$actualChildren = $filesystem->listContents($baseDir);
 			// Todo: Get this config from somewhere sensible (maybe File?).
 			$ignoreRules = Filesystem::config()->sync_blacklisted_patterns;
 			$allowedExtensions = File::config()->allowed_extensions;
 			$checkExtensions = $this->config()->apply_restrictions_to_admin || !Permission::check('ADMIN');
 
 			foreach($actualChildren as $actualChild) {
+				$filename = $filesystem->getFilename($actualChild);
 				$skip = false;
 
 				// Check ignore patterns
-				if($ignoreRules) foreach($ignoreRules as $rule) {
-					if(preg_match($rule, $actualChild)) {
-						$skip = true;
-						break;
+				if($ignoreRules) {
+					foreach($ignoreRules as $rule) {
+						if(preg_match($rule, $filename)) {
+							$skip = true;
+							break;
+						}
 					}
 				}
 
 				// Check allowed extensions, unless admin users are allowed to bypass these exclusions
-				if($checkExtensions
-					&& ($extension = $this->getFIlesystem()->getFileExtension($actualChild))
-					&& !in_array(strtolower($extension), $allowedExtensions)
-				) {
+				$extension = $filesystem->getFileExtension($actualChild);
+				$skipExtension = !in_array(strtolower($extension), $allowedExtensions);
+				if(!$filesystem->isSandboxed($actualChild) || ($checkExtensions && $skipExtension)) {
 					$skip = true;
 				}
 
@@ -200,8 +199,9 @@ class Folder extends File {
 				// A record with a bad class type doesn't deserve to exist. It must be purged!
 				if(isset($hasDbChild[$actualChild])) {
 					$child = $hasDbChild[$actualChild];
-					if(( !( $child instanceof Folder ) && is_dir($baseDir . $actualChild) )
-					|| (( $child instanceof Folder ) && !is_dir($baseDir . $actualChild)) ) {
+					if((!($child instanceof Folder) && $filesystem->isDir($actualChild))
+						|| (( $child instanceof Folder) && !$filesystem->isDir($actualChild))
+					) {
 						DB::prepared_query('DELETE FROM "File" WHERE "ID" = ?', array($child->ID));
 						unset($hasDbChild[$actualChild]);
 					}
@@ -212,11 +212,11 @@ class Folder extends File {
 					unset($unwantedDbChildren[$actualChild]);
 				} else {
 					$added++;
-					$childID = $this->constructChild($actualChild);
-					$child = DataObject::get_by_id("File", $childID);
+					$childId = $this->constructChild($filesystem->getFilename($actualChild));
+					$child = File::get()->byId($childId);
 				}
 
-				if( $child && $this->getFilesystem()->isDir($baseDir . $actualChild)) {
+				if($child && $this->getFilesystem()->isDir($child->getFilename())) {
 					$childResult = $child->syncChildren();
 					$added += $childResult['added'];
 					$deleted += $childResult['deleted'];
@@ -229,9 +229,11 @@ class Folder extends File {
 			}
 
 			// Iterate through the unwanted children, removing them all
-			if(isset($unwantedDbChildren)) foreach($unwantedDbChildren as $unwantedDbChild) {
-				DB::prepared_query('DELETE FROM "File" WHERE "ID" = ?', array($unwantedDbChild->ID));
-				$deleted++;
+			if(isset($unwantedDbChildren)) {
+				foreach($unwantedDbChildren as $unwantedDbChild) {
+					DB::prepared_query('DELETE FROM "File" WHERE "ID" = ?', array($unwantedDbChild->ID));
+					$deleted++;
+				}
 			}
 		} else {
 			DB::prepared_query('DELETE FROM "File" WHERE "ID" = ?', array($this->ID));
@@ -253,24 +255,24 @@ class Folder extends File {
 	 * @return integer the ID of the newly saved File record
 	 */
 	public function constructChild($name) {
+		$filesystem = $this->getFilesystem();
+
 		// Determine the class name - File, Folder or Image
-		$baseDir = $this->FullPath;
-		if($this->getFilesystem()->isDir($baseDir . $name)) {
+		$filename = $this->getRelativePath() . $name;
+		if($filesystem->isDir($filename)) {
 			$className = "Folder";
+			$filename = rtrim($filename, $filesystem->getPathSeparator()) . $filesystem->getPathSeparator();
 		} else {
-			$className = File::get_class_for_file_extension($this->getFilesystem()->getFileExtension($baseDir . $name));
+			$className = File::get_class_for_file_extension($filesystem->getFileExtension($filename));
 		}
 
-		$ownerID = Member::currentUserID();
-
-		$filename = $this->Filename . $name;
-		if($className == 'Folder' ) $filename .= '/';
+		$ownerId = Member::currentUserID();
 
 		$nowExpression = DB::get_conn()->now();
 		DB::prepared_query("INSERT INTO \"File\"
 			(\"ClassName\", \"ParentID\", \"OwnerID\", \"Name\", \"Filename\", \"Created\", \"LastEdited\", \"Title\")
 			VALUES (?, ?, ?, ?, ?, $nowExpression, $nowExpression, ?)",
-			array($className, $this->ID, $ownerID, $name, $filename, $name)
+			array($className, $this->ID, $ownerId, $name, $filename, $name)
 		);
 
 		return DB::get_generated_id("File");

@@ -325,7 +325,7 @@ class File extends DataObject {
 	 * @return string The relative link to the file
 	 */
 	public function RelativeLink() {
-		return $this->getFilename();
+		return $this->getFilesystem()->getRelativeUrl($this->getFilename());
 	}
 
 	/**
@@ -587,7 +587,6 @@ class File extends DataObject {
 	 */
 	protected function onAfterWrite() {
 		parent::onAfterWrite();
-
 		$this->updateFilesystem();
 	}
 
@@ -777,15 +776,7 @@ class File extends DataObject {
 	 * @return String
 	 */
 	public function getFullPath() {
-		$baseFolder = Director::baseFolder();
-
-		if(strpos($this->getFilename(), $baseFolder) === 0) {
-			// if path is absolute already, just return
-			return $this->getFilename();
-		} else {
-			// otherwise assume silverstripe-basefolder
-			return Director::baseFolder() . '/' . $this->getFilename();
-		}
+		return $this->getFilesystem()->makeAbsolute($this->getFilename());
 	}
 
 	/**

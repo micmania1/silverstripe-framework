@@ -9,6 +9,17 @@ class FileTest extends SapphireTest {
 
 	protected $extraDataObjects = array('FileTest_MyCustomFile');
 
+	protected $filesystem;
+
+	public function getFilesystem() {
+		if($this->filesystem) return $this->filesystem;
+		return $this->filesystem = new SilverStripe\Framework\Filesystem\Filesystem('assets/', 'assets/');
+	}
+
+	public function getBasePath() {
+		return $this->getFilesystem()->getBasePath();
+	}
+
 	public function testLinkShortcodeHandler() {
 		$testFile = $this->objFromFixture('File', 'asdf');
 
@@ -57,15 +68,14 @@ class FileTest extends SapphireTest {
 		// Note: We can't use fixtures/setUp() for this, as we want to create the db record manually.
 		// Creating the folder is necessary to avoid having "Filename" overwritten by setName()/setRelativePath(),
 		// because the parent folders don't exist in the database
-		$folder = Folder::find_or_make('/FileTest/');
-		$testfilePath = 'assets/FileTest/CreateWithFilenameHasCorrectPath.txt'; // Important: No leading slash
-		$fh = fopen(BASE_PATH . '/' . $testfilePath, "w");
+		$folder = Folder::find_or_make('FileTest/');
+		$testfilePath = 'FileTest/CreateWithFilenameHasCorrectPath.txt'; // Important: No leading slash
+		$fh = fopen($this->getBasePath() . '/' . $testfilePath, "w");
 		fwrite($fh, str_repeat('x',1000000));
 		fclose($fh);
 
 		$file = new File();
 		$file->Filename = $testfilePath;
-		// TODO This should be auto-detected
 		$file->ParentID = $folder->ID;
 		$file->write();
 
@@ -190,27 +200,27 @@ class FileTest extends SapphireTest {
 
 	public function testLinkAndRelativeLink() {
 		$file = $this->objFromFixture('File', 'asdf');
-		$this->assertEquals(ASSETS_DIR . '/FileTest.txt', $file->RelativeLink());
-		$this->assertEquals(Director::baseURL() . ASSETS_DIR . '/FileTest.txt', $file->Link());
+		$this->assertEquals('FileTest.txt', $file->RelativeLink());
+		$this->assertEquals($this->getFilesystem()->getBaseUrl() . 'FileTest.txt', $file->Link());
 	}
 
 	public function testGetRelativePath() {
 		$rootfile = $this->objFromFixture('File', 'asdf');
-		$this->assertEquals('assets/FileTest.txt', $rootfile->getRelativePath(), 'File in assets/ folder');
+		$this->assertEquals('FileTest.txt', $rootfile->getRelativePath(), 'File in assets/ folder');
 
 		$subfolderfile = $this->objFromFixture('File', 'subfolderfile');
-		$this->assertEquals('assets/FileTest-subfolder/FileTestSubfolder.txt', $subfolderfile->getRelativePath(),
+		$this->assertEquals('FileTest-subfolder/FileTestSubfolder.txt', $subfolderfile->getRelativePath(),
 			'File in subfolder within assets/ folder, with existing Filename');
 
 		$subfolderfilesetfromname = $this->objFromFixture('File', 'subfolderfile-setfromname');
-		$this->assertEquals('assets/FileTest-subfolder/FileTestSubfolder2.txt',
+		$this->assertEquals('FileTest-subfolder/FileTestSubfolder2.txt',
 			$subfolderfilesetfromname->getRelativePath(),
 			'File in subfolder within assets/ folder, with Filename generated through setName()');
 	}
 
 	public function testGetFullPath() {
 		$rootfile = $this->objFromFixture('File', 'asdf');
-		$this->assertEquals(ASSETS_PATH . '/FileTest.txt', $rootfile->getFullPath(), 'File in assets/ folder');
+		$this->assertEquals('FileTest.txt', $rootfile->getFullPath(), 'File in assets/ folder');
 	}
 
 	public function testGetURL() {
@@ -231,7 +241,7 @@ class FileTest extends SapphireTest {
 
 		/* However, if Name is set instead of Filename, then Title is set */
 		$file = $this->objFromFixture('File', 'setfromname');
-		$this->assertEquals(ASSETS_DIR . '/FileTest.png', $file->Filename);
+		$this->assertEquals('FileTest.png', $file->Filename);
 		$this->assertEquals('FileTest', $file->Title);
 	}
 
@@ -298,7 +308,7 @@ class FileTest extends SapphireTest {
 
 		//get folder again and see if the filename has changed
 		$folder = DataObject::get_by_id('Folder',$folderID);
-		$this->assertEquals($folder->Filename, ASSETS_DIR ."/". $newTitle ."/",
+		$this->assertEquals($folder->Filename, $newTitle . "/",
 			"Folder Filename updated after rename of Title");
 
 
@@ -388,20 +398,20 @@ class FileTest extends SapphireTest {
 	public function setUp() {
 		parent::setUp();
 
-		if(!file_exists(ASSETS_PATH)) mkdir(ASSETS_PATH);
+		$filesystem = $this->getFilesystem();
 
 		/* Create a test folders for each of the fixture references */
 		$folderIDs = $this->allFixtureIDs('Folder');
 		foreach($folderIDs as $folderID) {
 			$folder = DataObject::get_by_id('Folder', $folderID);
-			if(!file_exists(BASE_PATH."/$folder->Filename")) mkdir(BASE_PATH."/$folder->Filename");
+			if(!$filesystem->has($folder->Filename)) $filesystem->createDir($folder->Filename);
 		}
 
 		/* Create a test files for each of the fixture references */
 		$fileIDs = $this->allFixtureIDs('File');
 		foreach($fileIDs as $fileID) {
 			$file = DataObject::get_by_id('File', $fileID);
-			$fh = fopen(BASE_PATH."/$file->Filename", "w");
+			$fh = fopen($file->getFullPath(), "w");
 			fwrite($fh, str_repeat('x',1000000));
 			fclose($fh);
 		}
@@ -420,35 +430,37 @@ class FileTest extends SapphireTest {
 	public function tearDown() {
 		parent::tearDown();
 
+		$filesystem = $this->getFilesystem();
+
 		/* Remove the test files that we've created */
 		$fileIDs = $this->allFixtureIDs('File');
 		foreach($fileIDs as $fileID) {
 			$file = DataObject::get_by_id('File', $fileID);
-			if($file && file_exists(BASE_PATH."/$file->Filename")) unlink(BASE_PATH."/$file->Filename");
+			if($file && $filesystem->has($file->Filename)) $filesystem->delete($file->Filename);
 		}
 
 		/* Remove the test folders that we've crated */
 		$folderIDs = $this->allFixtureIDs('Folder');
 		foreach($folderIDs as $folderID) {
 			$folder = DataObject::get_by_id('Folder', $folderID);
-			if($folder && file_exists(BASE_PATH."/$folder->Filename")) {
-				Filesystem::removeFolder(BASE_PATH."/$folder->Filename");
+			if($folder && $filesystem->isDir($folder->Filename)) {
+				$filesystem->removeDir($folder->Filename, true);
 			}
 		}
 
 		// Remove left over folders and any files that may exist
-		if(file_exists('../assets/FileTest')) Filesystem::removeFolder('../assets/FileTest');
-		if(file_exists('../assets/FileTest-subfolder')) Filesystem::removeFolder('../assets/FileTest-subfolder');
-		if(file_exists('../assets/FileTest.txt')) unlink('../assets/FileTest.txt');
+		if($filesystem->has('FileTest')) $filesystem->removeDir('FileTest', true);
+		if($filesystem->has('FileTest-subfolder')) $filesystem->removeDir('FileTest-subfolder', true);
+		if($filesystem->has('FileTest.txt')) $filesystem->delete('FileTest.txt');
 
-		if (file_exists("../assets/FileTest-folder-renamed1")) {
-			Filesystem::removeFolder("../assets/FileTest-folder-renamed1");
+		if ($filesystem->has("FileTest-folder-renamed1")) {
+			$filesystem->removeDir("FileTest-folder-renamed1", true);
 		}
-		if (file_exists("../assets/FileTest-folder-renamed2")) {
-			Filesystem::removeFolder("../assets/FileTest-folder-renamed2");
+		if ($filesystem->has("FileTest-folder-renamed2")) {
+			$filesystem->removeDir("FileTest-folder-renamed2", true);
 		}
-		if (file_exists("../assets/FileTest-folder-renamed3")) {
-			Filesystem::removeFolder("../assets/FileTest-folder-renamed3");
+		if ($filesystem->has("FileTest-folder-renamed3")) {
+			$filesystem->removeDir("FileTest-folder-renamed3", true);
 		}
 	}
 
