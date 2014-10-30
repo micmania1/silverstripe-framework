@@ -1,5 +1,7 @@
 <?php
 
+use \SilverStripe\Framework\Filesystem\Filesystem;
+
 /**
  * @package framework
  * @subpackage tests
@@ -9,6 +11,8 @@ class ImageTest extends SapphireTest {
 	protected static $fixture_file = 'ImageTest.yml';
 
 	protected $origBackend;
+
+	protected $filesystem;
 
 	public function setUp() {
 		if(get_class($this) == "ImageTest") $this->skipTest = true;
@@ -20,47 +24,57 @@ class ImageTest extends SapphireTest {
 		if($this->skipTest)
 			return;
 
-		if(!file_exists(ASSETS_PATH)) mkdir(ASSETS_PATH);
-
 		// Create a test folders for each of the fixture references
 		$folderIDs = $this->allFixtureIDs('Folder');
 
+		$filesystem = $this->getFilesystem();
+
 		foreach($folderIDs as $folderID) {
 			$folder = DataObject::get_by_id('Folder', $folderID);
-
-			if(!file_exists(BASE_PATH."/$folder->Filename")) mkdir(BASE_PATH."/$folder->Filename");
+			if(!$filesystem->has($folder->getFilename())) {
+				$filesystem->createDir($folder->Filename, true);
+			}
 		}
 	}
 
 	public function tearDown() {
 		if($this->origBackend) Image::set_backend($this->origBackend);
 
+		$filesystem = $this->getFilesystem();
+
 		/* Remove the test files that we've created */
 		$fileIDs = $this->allFixtureIDs('Image');
 		foreach($fileIDs as $fileID) {
 			$file = DataObject::get_by_id('Image', $fileID);
-			if($file && file_exists(BASE_PATH."/$file->Filename")) unlink(BASE_PATH."/$file->Filename");
+			if($file && $filesystem->has($file->Filename)) {
+				$filesystem->delete($file->Filename);
+			}
 		}
 
 		/* Remove the test folders that we've crated */
 		$folderIDs = $this->allFixtureIDs('Folder');
 		foreach($folderIDs as $folderID) {
 			$folder = DataObject::get_by_id('Folder', $folderID);
-			if($folder && file_exists(BASE_PATH."/$folder->Filename")) {
-				Filesystem::removeFolder(BASE_PATH."/$folder->Filename");
+			if($folder && $filesystem->isDir($folder->Filename)) {
+				$filesystem->removeDir($folder->Filename, true);
 			}
-			if($folder && file_exists(BASE_PATH."/".$folder->Filename."_resampled")) {
-				Filesystem::removeFolder(BASE_PATH."/".$folder->Filename."_resampled");
+			if($folder && $filesystem->isDir($folder->getFilename() . '_resampled')) {
+				$filesystem->removeDir($folder->getFilename() . '_resampled');
 			}
 		}
 
 		parent::tearDown();
 	}
 
+	public function getFilesystem() {
+		if($this->filesystem) return $this->filesystem;
+		return $this->filesystem = new Filesystem('assets/', 'assets/');
+	}
+
 	public function testGetTagWithTitle() {
 		$image = $this->objFromFixture('Image', 'imageWithTitle');
-		$expected = '<img src="' . Director::baseUrl()
-			. 'assets/ImageTest/test_image.png" alt="This is a image Title" />';
+		$expected = '<img src="' . $this->getFilesystem()->getBaseUrl()
+			. '/ImageTest/test_image.png" alt="This is a image Title" />';
 		$actual = $image->getTag();
 
 		$this->assertEquals($expected, $actual);
@@ -68,7 +82,7 @@ class ImageTest extends SapphireTest {
 
 	public function testGetTagWithoutTitle() {
 		$image = $this->objFromFixture('Image', 'imageWithoutTitle');
-		$expected = '<img src="' . Director::baseUrl() . 'assets/ImageTest/test_image.png" alt="test_image" />';
+		$expected = '<img src="' . $this->getFilesystem()->getBaseUrl() . '/ImageTest/test_image.png" alt="test_image" />';
 		$actual = $image->getTag();
 
 		$this->assertEquals($expected, $actual);
@@ -76,8 +90,8 @@ class ImageTest extends SapphireTest {
 
 	public function testGetTagWithoutTitleContainingDots() {
 		$image = $this->objFromFixture('Image', 'imageWithoutTitleContainingDots');
-		$expected = '<img src="' . Director::baseUrl()
-			. 'assets/ImageTest/test.image.with.dots.png" alt="test.image.with.dots" />';
+		$expected = '<img src="' . $this->getFilesystem()->getBaseUrl()
+			. '/ImageTest/test.image.with.dots.png" alt="test.image.with.dots" />';
 		$actual = $image->getTag();
 
 		$this->assertEquals($expected, $actual);
@@ -283,7 +297,7 @@ class ImageTest extends SapphireTest {
 		$this->assertEquals($hash, md5_file($imageThirdPath), 'Regeneration of third image is correct');
 
 		/* Check that no other images exist, to ensure that the regeneration did not create other images */
-		$this->assertEquals($filesInFolder, $folder->find(dirname($imageThirdPath)),
+		$this->assertEquals($filesInFolder, $folder->find($imageThirdPath),
 			'Image folder contains only the expected image files after regeneration');
 	}
 
@@ -291,18 +305,24 @@ class ImageTest extends SapphireTest {
 		$image = $this->objFromFixture('Image', 'imageWithMetacharacters');
 		$image_generated = $image->SetWidth(200);
 		$p = $image_generated->getFullPath();
-		$this->assertTrue(file_exists($p), 'Resized image exists after creation call');
+
+		$filesystem = $this->getFilesystem();
+
+		$this->assertTrue($filesystem->has($p), 'Resized image exists after creation call');
 		$this->assertEquals(1, $image->regenerateFormattedImages(), 'Cached images were regenerated correct');
 		$this->assertEquals($image_generated->getWidth(), 200,
 			'Resized image has correct width after regeneration call');
-		$this->assertTrue(file_exists($p), 'Resized image exists after regeneration call');
+		$this->assertTrue($filesystem->has($p), 'Resized image exists after regeneration call');
 	}
 
 	public function testRegenerateImagesWithRenaming() {
 		$image = $this->objFromFixture('Image', 'imageWithMetacharacters');
 		$image_generated = $image->SetWidth(200);
+
+		$filesystem = $this->getFilesystem();
+
 		$p = $image_generated->getFullPath();
-		$this->assertTrue(file_exists($p), 'Resized image exists after creation call');
+		$this->assertTrue($filesystem->has($p), 'Resized image exists after creation call');
 
 		// Encoding of the arguments is duplicated from cacheFilename
 		$oldArgumentString = base64_encode(json_encode(array(200)));
@@ -310,9 +330,10 @@ class ImageTest extends SapphireTest {
 
 		$newPath = str_replace($oldArgumentString, $newArgumentString, $p);
 		$newRelative = str_replace($oldArgumentString, $newArgumentString, $image_generated->getFileName());
+		// todo: burn it with fire!
 		rename($p, $newPath);
-		$this->assertFalse(file_exists($p), 'Resized image does not exist after movement call under old name');
-		$this->assertTrue(file_exists($newPath), 'Resized image exists after movement call under new name');
+		$this->assertFalse($filesystem->has($p), 'Resized image does not exist after movement call under old name');
+		$this->assertTrue($filesystem->has($newPath), 'Resized image exists after movement call under new name');
 		$this->assertEquals(1, $image->regenerateFormattedImages(),
 			'Cached images were regenerated in the right number');
 
@@ -323,11 +344,14 @@ class ImageTest extends SapphireTest {
 	public function testGeneratedImageDeletion() {
 		$image = $this->objFromFixture('Image', 'imageWithMetacharacters');
 		$image_generated = $image->SetWidth(200);
+
+		$filesystem = $this->getFilesystem();
+
 		$p = $image_generated->getFullPath();
-		$this->assertTrue(file_exists($p), 'Resized image exists after creation call');
+		$this->assertTrue($filesystem->has($p), 'Resized image exists after creation call');
 		$numDeleted = $image->deleteFormattedImages();
 		$this->assertEquals(1, $numDeleted, 'Expected one image to be deleted, but deleted ' . $numDeleted . ' images');
-		$this->assertFalse(file_exists($p), 'Resized image not existing after deletion call');
+		$this->assertFalse($filesystem->has($p), 'Resized image not existing after deletion call');
 	}
 
 	/**
@@ -336,17 +360,19 @@ class ImageTest extends SapphireTest {
 	public function testMultipleGenerateManipulationCallsImageDeletion() {
 		$image = $this->objFromFixture('Image', 'imageWithMetacharacters');
 
+		$filesystem = $this->getFilesystem();
+
 		$firstImage = $image->SetWidth(200);
 		$firstImagePath = $firstImage->getFullPath();
-		$this->assertTrue(file_exists($firstImagePath));
+		$this->assertTrue($filesystem->has($firstImagePath));
 
 		$secondImage = $firstImage->SetHeight(100);
 		$secondImagePath = $secondImage->getFullPath();
-		$this->assertTrue(file_exists($secondImagePath));
+		$this->assertTrue($filesystem->has($secondImagePath));
 
 		$image->deleteFormattedImages();
-		$this->assertFalse(file_exists($firstImagePath));
-		$this->assertFalse(file_exists($secondImagePath));
+		$this->assertFalse($filesystem->has($firstImagePath));
+		$this->assertFalse($filesystem->has($secondImagePath));
 	}
 
 	/**

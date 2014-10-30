@@ -21,7 +21,7 @@ class GDImageTest extends ImageTest {
 
 			$image = imagecreatetruecolor(300,300);
 
-			imagepng($image, BASE_PATH."/{$file->Filename}");
+			imagepng($image, $this->getFilesystem()->resolvePath($file->getFilename()));
 			imagedestroy($image);
 
 			$file->write();
@@ -43,7 +43,7 @@ class GDImageTest extends ImageTest {
 		$image = $this->objFromFixture('Image', 'imageWithTitle');
 		$cache = SS_Cache::factory('GDBackend_Manipulations');
 		$fullPath = $image->getFullPath();
-		$key = md5(implode('_', array($fullPath, filemtime($fullPath))));
+		$key = md5(implode('_', array($fullPath, $this->getFilesystem()->getLastModified($fullPath))));
 
 		try {
 			// Simluate a failed manipulation

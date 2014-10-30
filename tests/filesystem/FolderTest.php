@@ -224,8 +224,12 @@ class FolderTest extends SapphireTest {
 	 */
 	public function testLinkAndRelativeLink() {
 		$folder = $this->objFromFixture('Folder', 'folder1');
+
+		$filesystem = $this->getFilesystem();
+		$filesystem->setbaseUrl('http://localhost/assets');
+
 		$this->assertEquals('assets/FileTest-folder1/', $folder->RelativeLink());
-		$this->assertEquals(Director::baseURL() . 'assets/FileTest-folder1/', $folder->Link());
+		$this->assertEquals('http://localhost/assets/' . $folder->getFilename(), $folder->Link());
 	}
 
 	/**

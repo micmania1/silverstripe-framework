@@ -1,12 +1,14 @@
 <?php
 
+use \SilverStripe\Framework\Filesystem\Filesystem;
+
 class FilesystemTest extends SapphireTest {
 
 	protected $filesystem;
 
 	public function getFilesystem() {
 		if($this->filesystem) return $this->filesystem;
-		return $this->filesystem = new \SilverStripe\Framework\Filesystem\Filesystem('assets/', 'assets/');
+		return $this->filesystem = new Filesystem('assets/', 'assets/');
 	}
 
 
@@ -138,6 +140,35 @@ class FilesystemTest extends SapphireTest {
 
 		$path = 'test/';
 		$this->assertNull($this->getFilesystem()->getFileExtension($path));
+
+		$path = 'Somefile.TXT';
+		$this->assertEquals('txt', $this->getFilesystem()->getFileExtension($path));
+	}
+
+
+	public function testGetUrl() {
+		$filesystem = $this->getFilesystem();
+		$filesystem->setBaseUrl('http://localhost/assets');
+
+		$path = 'test.pdf';
+		$this->assertEquals('http://localhost/assets/' . $path, $filesystem->getUrl($path));
+	}
+
+	public function testGetAbsoluteUrl() {
+		$filesystem = $this->getFilesystem();
+		$filesystem->setBaseUrl('http://localhost/assets');
+
+		$path = 'test.pdf';
+		$this->assertEquals('http://localhost/assets/' . $path, $filesystem->getAbsoluteUrl($path));
+	}
+
+
+	public function testGetRelativeUrl() {
+		$filesystem = $this->getFilesystem();
+		$filesystem->setBaseUrl('http://localhost/assets');
+
+		$path = 'test.pdf';
+		$this->assertEquals('assets/' . $path, $filesystem->getRelativeUrl($path));
 	}
 
 }

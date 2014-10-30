@@ -125,7 +125,6 @@ class Filesystem extends \Object implements FilesystemInterface {
 	 * @return string
 	 */
 	public function resolvePath($path) {
-		$orig = $path;
 		// Cleanup the path
 		$path = $this->isAbsolute($path) ? $path : $this->makeAbsolute($path);
 
@@ -157,7 +156,7 @@ class Filesystem extends \Object implements FilesystemInterface {
 
 
 	/**
-	 * Ensures that the given path is within the current root.
+	 * Ensures that the given path is within the current root. Throws an exception if its not.
 	 *
 	 * @param $path string
 	 *
@@ -166,9 +165,9 @@ class Filesystem extends \Object implements FilesystemInterface {
 	 * @throws \Exception if the given path is outside of the current root.
 	 */
 	public function sandboxPath($path) {
-		$path = $this->resolvePath($path);
+		$path = $this->resolvePath($path) . $this->getPathSeparator();
 		if($this->isSandboxed($path)) {
-			return $path;
+			return rtrim($path, $this->getPathSeparator());
 		}
 		throw new \Exception($path . ' is not within the current filesystem root.');
 		return $this->getBasePath();
@@ -176,7 +175,7 @@ class Filesystem extends \Object implements FilesystemInterface {
 
 
 	/**
-	 * Makes the path absolute.
+	 * Makes the path absolute if it isn't already.
 	 *
 	 * @param $path
 	 *
@@ -243,7 +242,13 @@ class Filesystem extends \Object implements FilesystemInterface {
 	 */
 	public function isSandboxed($path) {
 		$path = $this->resolvePath($path);
-		return (substr_compare($path, $this->getBasePath(), 0, strlen($this->getBasePath())) === 0);
+
+		// Important: The path separator must be added to this check.
+		// If not then /root/path-outside-root will return true.
+		$path .= $this->getPathSeparator();
+		$basePath = $this->getBasePath() . $this->getPathSeparator();
+
+		return (substr_compare($path, $basePath, 0, strlen($basePath)) === 0);
 	}
 
 
@@ -259,8 +264,10 @@ class Filesystem extends \Object implements FilesystemInterface {
 
 		// If we're on a directory, return it.
 		if($this->isDir($filename)) return $this->sandboxPath($filename);
+
 		// If we're in a file, return its parent folder.
 		if($this->has($filename)) return $this->sandboxPath(dirname($filename));
+
 		// The file may not exist yet, so the above won't work. Here we're assuming anything with an extension
 		// is meant to be a file and anything without if a folder.
 		$ext = $this->getFileExtension($filename);
@@ -282,7 +289,7 @@ class Filesystem extends \Object implements FilesystemInterface {
 	 * @return string
 	 */
 	public function getUrl($fileName) {
-		return '/' . $this->getRelativeUrl($fileName);
+		return $this->getAbsoluteUrl($fileName);
 	}
 
 
@@ -326,58 +333,121 @@ class Filesystem extends \Object implements FilesystemInterface {
 			$iterator = $this->getDirectoryIterator($path, $recursive);
 
 			$files = array();
-			foreach($iterator as $file) {
-				if($file->isDot()) continue;
-				array_push($files, $this->makeRelative($file->getPathname()));
+			if($recursive) {
+				$iterator = new \RecursiveIteratorIterator($iterator, \RecursiveIteratorIterator::SELF_FIRST);
+				if($iterator->hasChildren()) {
+					foreach($iterator as $child) {
+						$files[] = $this->makeRelative($child);
+					}
+				}
+			} else {
+				foreach($iterator as $file) {
+					if($file->isDot()) continue;
+					array_push($files, $this->makeRelative($file->getPathname()));
+				}
 			}
 		}
 		return $files;
 	}
 
 
+	/**
+	 * Checks that a file or directory exists.
+	 *
+	 * @param $path
+	 *
+	 * @return bool
+	 */
 	public function has($path) {
 		return file_exists($this->sandboxPath($path));
 	}
 
+
+	/**
+	 * Checks that a file exists.
+	 *
+	 * @param $path
+	 *
+	 * @return bool
+	 */
 	public function isFile($path) {
 		return $this->has($path) && is_file($this->sandboxPath($path));
 	}
 
+
+	/**
+	 * Checks that a directory exists.
+	 *
+	 * @param $path
+	 *
+	 * @return bool
+	 */
 	public function isDir($path) {
 		return $this->has($path) && is_dir($this->sandboxPath($path));
 	}
 
-	public function delete($path, $includeContent = false) {
+
+	/**
+	 * Deletes a file or directory.
+	 *
+	 * @param $path
+	 * @param bool $recursive
+	 *
+	 * @return bool
+	 */
+	public function delete($path, $recursive = false) {
 		if($this->isFile($path)) {
 			return unlink($this->sandboxPath($path));
 		} else if ($this->isDir($path)) {
-			return $this->removeDir($path, $includeContent);
+			return $this->removeDir($path, $recursive);
 		}
 		return false;
 	}
 
+
+	/**
+	 * Get the size of a file in bytes.
+	 *
+	 * @param $path
+	 *
+	 * @return int
+	 */
 	public function getFileSize($path) {
-		return filesize($this->sandboxPath());
+		return filesize($this->sandboxPath($path));
 	}
 
+
+	/**
+	 * Get the file extension.
+	 *
+	 * @param $path
+	 *
+	 * @return null|string
+	 */
 	public function getFileExtension($path) {
 		$resolved = $this->resolvePath($path);
 		if($this->isSandboxed($resolved) && $this->isFile($resolved)) {
 			return pathinfo($this->sandboxPath($resolved), PATHINFO_EXTENSION);
 		}
 		// todo: File should not be here. Kill it.
-		$allowedExtensions = \File::config()->allowed_extensions;
-		$ext = null;
+		$allowedExtensions = array_map('strtolower', \File::config()->allowed_extensions);
+		$resolved = strtolower($resolved);
 		foreach($allowedExtensions as $extension) {
 			if(substr_compare($resolved, $extension, strlen($extension) * -1) === 0) {
-				$ext = $extension;
-				break;
+				return $extension;
 			}
 		}
-		return $ext;
+		return null;
 	}
 
 
+	/**
+	 * Get the filename for the given path.
+	 *
+	 * @param $path
+	 *
+	 * @return mixed|string
+	 */
 	public function getFilename($path) {
 		$path = $this->resolvePath($path);
 		if($this->isSandboxed($path)) {
@@ -392,6 +462,15 @@ class Filesystem extends \Object implements FilesystemInterface {
 		return '';
 	}
 
+	/**
+	 * Create a new directory.
+	 *
+	 * @param $path
+	 * @param bool $recursive
+	 * @param array $config
+	 *
+	 * @return bool|mixed
+	 */
 	public function createDir($path, $recursive = true, $config = array()) {
 		$mode = isset($config['mode']) ? $config['mode'] : $this->config()->folder_create_mask;
 		$path = $this->sandboxPath($path);
@@ -401,23 +480,55 @@ class Filesystem extends \Object implements FilesystemInterface {
 		return false;
 	}
 
-	public function removeDir($path, $includeContent = false) {
+
+	/**
+	 * Remove a directory.
+	 *
+	 * @param $path
+	 * @param bool $recursive
+	 *
+	 * @return bool|mixed
+	 */
+	public function removeDir($path, $recursive = false) {
+		$path = $this->sandboxPath($path);
 		if($this->isDir($path)) {
-			$path = $this->sandboxPath($path);
-			$content = array_diff(scandir($path), array('.', '..'));
-			if(count($content)) {
-				if($includeContent) {
-					foreach($content as $file) {
-						$file = rtrim($path, $this->getPathSeparator()) . $this->getPathSeparator() . $file;
-						$this->delete($file, true);
+			$contents = $this->listContents($path);
+			if(count($contents) > 0) {
+				foreach($contents as $file) {
+					if($recursive && $this->isDir($file)) {
+						$this->removeDir($file, true);
+					} else if ($recursive && $this->isFile($file)) {
+						$this->delete($file);
+					} else {
+						throw new \Exception($file . ' is not empty.');
 					}
 				}
 			}
-			return rmdir($this->resolvePath($path));
+			return rmdir($path);
 		}
 		return false;
 	}
 
+
+	/**
+	 * Gets the last modified time of the file as a unix timestamp.
+	 *
+	 * @param $path
+	 *
+	 * @return int|null
+	 */
+	public function getLastModified($path) {
+		$path = $this->sandboxPath($path);
+		if($this->has($path)) {
+			return filemtime($path);
+		}
+		return null;
+	}
+
+
+	/*
+	 * @todo Can this be implemented better or made protected?
+	 */
 	public function levelUp($path) {
 		$path = trim($path, $this->getPathSeparator());
 		$path = explode($this->getPathSeparator(), $path);
@@ -425,6 +536,14 @@ class Filesystem extends \Object implements FilesystemInterface {
 		return $this->sandboxPath(implode($this->getPathSeparator(), $path));
 	}
 
+
+	/**
+	 * @todo can this be implemented better or made protected?
+	 *
+	 * @param $path
+	 *
+	 * @return string
+	 */
 	public function getBaseName($path) {
 		return basename($path);
 	}
@@ -442,8 +561,7 @@ class Filesystem extends \Object implements FilesystemInterface {
 	protected function getDirectoryIterator($path, $recursive = false) {
 		$path = $this->sandboxPath($path);
 		if($recursive) {
-			$directory = new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS);
-			return new RecursiveIteratorIterator($directory, RecursiveIteratorIterator::SELF_FIRST);
+			return new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS);
 		} else {
 			return new \DirectoryIterator($path);
 		}

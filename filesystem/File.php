@@ -236,24 +236,29 @@ class File extends DataObject {
 	 * @return mixed null if not found, File object of found file
 	 */
 	public static function find($filename) {
+		$filesystem = FilesystemManager::inst()->get(self::config()->default_filesystem);
+
 		// Get the base file if $filename points to a resampled file
 		$filename = preg_replace('/_resampled\/[^-]+-/', '', $filename);
+		$filename = $filesystem->makeRelative($filename);
 
 		// Split to folders and the actual filename, and traverse the structure.
-		$parts = explode(DIRECTORY_SEPARATOR, $filename);
-		$parentID = 0;
-		$item = null;
-		foreach($parts as $part) {
-			if($part == ASSETS_DIR && !$parentID) continue;
-			$item = File::get()->filter(array(
-				'Name' => $part,
-				'ParentID' => $parentID
-			))->first();
-			if(!$item) break;
-			$parentID = $item->ID;
+		$parts = explode($filesystem->getPathSeparator(), $filename);
+		if(count($parts) > 0) {	
+			$parentID = 0;
+			$item = null;
+			for($i = 1; $i < count($parts); $i++) {
+				$part = $parts[$i];
+				$item = File::get()->filter(array(
+					'Name' => $part,
+					'ParentID' => $parentID
+				))->first();
+				if(!$item) break;
+				$parentID = $item->ID;
+			}
+			return $item;
 		}
-
-		return $item;
+		return null;
 	}
 
 
@@ -303,12 +308,13 @@ class File extends DataObject {
 	 */
 	public function getFilesystem() {
 		if($this->filesystem) return $this->filesystem;
-		$filesystem = $this->filesystem = FilesystemManager::inst()->get($this->config()->default_filesystem);
-		if(!$filesystem->isDir($filesystem->getBasePath())) {
-			$filesystem->createDir($filesystem->getBasePath());
+		$this->filesystem = FilesystemManager::inst()->get($this->config()->default_filesystem);
+		if(!$this->filesystem->isDir($this->filesystem->getBasePath())) {
+			$this->filesystem->createDir($this->filesystem->getBasePath());
 		}
-		return $filesystem;
+		return $this->filesystem;
 	}
+
 
 	/**
 	 * Just an alias function to keep a consistent API with SiteTree

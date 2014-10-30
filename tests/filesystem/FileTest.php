@@ -200,7 +200,7 @@ class FileTest extends SapphireTest {
 
 	public function testLinkAndRelativeLink() {
 		$file = $this->objFromFixture('File', 'asdf');
-		$this->assertEquals('FileTest.txt', $file->RelativeLink());
+		$this->assertEquals('assets/FileTest.txt', $file->RelativeLink());
 		$this->assertEquals($this->getFilesystem()->getBaseUrl() . 'FileTest.txt', $file->Link());
 	}
 
@@ -220,17 +220,26 @@ class FileTest extends SapphireTest {
 
 	public function testGetFullPath() {
 		$rootfile = $this->objFromFixture('File', 'asdf');
-		$this->assertEquals('FileTest.txt', $rootfile->getFullPath(), 'File in assets/ folder');
+		$this->assertEquals($this->getBasePath() . '/FileTest.txt', $rootfile->getFullPath(), 'File in assets/ folder');
 	}
 
 	public function testGetURL() {
 		$rootfile = $this->objFromFixture('File', 'asdf');
-		$this->assertEquals(Director::baseURL() . $rootfile->getFilename(), $rootfile->getURL());
+
+		$filesystem = $this->getFilesystem();
+		$filesystem->setBaseUrl('http://localhost/assets');
+		$this->assertEquals('http://localhost/assets/' . $rootfile->getFilename(), $rootfile->getURL());
 	}
 
 	public function testGetAbsoluteURL() {
 		$rootfile = $this->objFromFixture('File', 'asdf');
-		$this->assertEquals(Director::absoluteBaseURL() . $rootfile->getFilename(), $rootfile->getAbsoluteURL());
+
+		$filesystem = $this->getFilesystem();
+		$filesystem->setBaseUrl('http://localhost/assets');
+		$this->assertEquals(
+			'http://localhost/assets/' . $rootfile->getFilename(),
+			$rootfile->getAbsoluteURL()
+		);
 	}
 
 	public function testNameAndTitleGeneration() {
