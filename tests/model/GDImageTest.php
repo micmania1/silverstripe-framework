@@ -60,6 +60,7 @@ class GDImageTest extends ImageTest {
 
 			// Check that the cache has been removed
 			$data = unserialize($cache->load($key));
+
 			$this->assertFalse($data);
 		}
 	}

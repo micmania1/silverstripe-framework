@@ -125,15 +125,6 @@ class FilesystemTest extends SapphireTest {
 		$this->assertTrue($this->getFilesystem()->isAbsolute('/'));
 	}
 
-
-	public function testGetCurrentDir() {
-		$dir = 'test';
-		$this->assertEquals($this->getBaseFolder() . '/test', $this->getFilesystem()->getCurrentDir($dir));
-
-		$dir = 'test/Somefile.gif';
-		$this->assertEquals($this->getBaseFolder() . '/test', $this->getFilesystem()->getCurrentDir($dir));
-	}
-
 	public function testGetFileExtension() {
 		$path = 'test/Somefile.gif';
 		$this->assertEquals('gif', $this->getFilesystem()->getFileExtension($path));
@@ -169,6 +160,17 @@ class FilesystemTest extends SapphireTest {
 
 		$path = 'test.pdf';
 		$this->assertEquals('assets/' . $path, $filesystem->getRelativeUrl($path));
+	}
+
+
+	public function testGetDirectory() {
+		$filesystem = $this->getFilesystem();
+
+		$path = $filesystem->makeRelative('directory');
+		$this->assertEquals($path, $filesystem->getDirectory($path));
+
+		$filePath = $filesystem->makeRelative('directory/somefile.txt');
+		$this->assertEquals($path, $filesystem->getDirectory($filePath));
 	}
 
 }

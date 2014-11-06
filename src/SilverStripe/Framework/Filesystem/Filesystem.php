@@ -253,35 +253,6 @@ class Filesystem extends \Object implements FilesystemInterface {
 
 
 	/**
-	 * Returns the current directory of the given filename.
-	 *
-	 * @param $filename string
-	 *
-	 * @return string
-	 */
-	public function getCurrentDir($filename) {
-		$filename = $this->makeAbsolute($filename);
-
-		// If we're on a directory, return it.
-		if($this->isDir($filename)) return $this->sandboxPath($filename);
-
-		// If we're in a file, return its parent folder.
-		if($this->has($filename)) return $this->sandboxPath(dirname($filename));
-
-		// The file may not exist yet, so the above won't work. Here we're assuming anything with an extension
-		// is meant to be a file and anything without if a folder.
-		$ext = $this->getFileExtension($filename);
-		if(empty($ext)) return $this->sandboxPath($filename);
-
-		// Figure out the current directory - we're currently on a file.
-		$parts = explode($this->getPathSeparator(), $filename);
-		array_pop($parts);
-		$path = implode($this->getPathSeparator(), $parts);
-		return $this->sandboxPath($path);
-	}
-
-
-	/**
 	 * Returns the accessible url relative to the root. eg. /assets/file.txt
 	 *
 	 * @param $fileName
@@ -546,6 +517,25 @@ class Filesystem extends \Object implements FilesystemInterface {
 	 */
 	public function getBaseName($path) {
 		return basename($path);
+	}
+
+
+	/**
+	 * Gets the current directory.
+	 *
+	 * @param $path
+	 *
+	 * @return string
+	 */
+	public function getDirectory($path) {
+		if($this->has($path)) {
+			$path = dirname($path);
+		} else if($this->getFileExtension($path)) {
+			$parts = explode($this->getPathSeparator(), rtrim($path, $this->getPathSeparator()));
+			array_pop($parts);
+			$path = implode($this->getPathSeparator(), $parts);
+		}
+		return rtrim($path, $this->getPathSeparator());
 	}
 
 

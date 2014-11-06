@@ -1,4 +1,7 @@
 <?php
+
+use \SilverStripe\Framework\Filesystem\FilesystemManager;
+
 /**
  * A wrapper class for GD-based images, with lots of manipulation functions.
  * @package framework
@@ -42,7 +45,7 @@ class GDBackend extends Object implements Image_Backend {
 		$this->cache = SS_Cache::factory('GDBackend_Manipulations');
 
 		if($filename) {
-			$this->cacheKey = md5(implode('_', array($filename, filemtime($filename))));
+			$this->cacheKey = md5(implode('_', array($filename, $this->getFilesystem()->getLastModified($filename))));
 			$this->manipulation = implode('|', $args);
 
 			$cacheData = unserialize($this->cache->load($this->cacheKey));
@@ -78,6 +81,17 @@ class GDBackend extends Object implements Image_Backend {
 
 		$this->quality = $this->config()->default_quality;
 		$this->interlace = $this->config()->image_interlace;
+	}
+
+
+	/**
+	 * Get the default Filesystem
+	 *
+	 * @return \SilverStripe\Framework\Filesystem\FilesystemInterface
+	 */
+	public function getFilesystem() {
+		$fs = Config::inst()->get('File', 'default_filesystem');
+		return FilesystemManager::inst()->get($fs);
 	}
 
 	public function setImageResource($resource) {
@@ -231,17 +245,13 @@ class GDBackend extends Object implements Image_Backend {
 			return $this;
 		}
 
-		if(!$width && !$height) user_error("No dimensions given", E_USER_ERROR);
-		if(!$width) user_error("Width not given", E_USER_ERROR);
-		if(!$height) user_error("Height not given", E_USER_ERROR);
-
 		$newGD = imagecreatetruecolor($width, $height);
 
 		// Preserves transparency between images
 		imagealphablending($newGD, false);
 		imagesavealpha($newGD, true);
 
-		imagecopyresampled($newGD, $this->gd, 0,0, 0, 0, $width, $height, $this->width, $this->height);
+		imagecopyresampled($newGD, $this->gd, 0, 0, 0, 0, $width, $height, $this->width, $this->height);
 
 		$output = clone $this;
 		$output->setImageResource($newGD);
@@ -492,41 +502,60 @@ class GDBackend extends Object implements Image_Backend {
 	}
 
 	public function makeDir($dirname) {
-		if(!file_exists(dirname($dirname))) $this->makeDir(dirname($dirname));
-		if(!file_exists($dirname)) mkdir($dirname, Config::inst()->get('Filesystem', 'folder_create_mask'));
+		if(!$this->getFilesystem()->has($dirname)) {
+			$this->getFilesystem()->createDir($dirname, true);
+		}
 	}
 
+	/******************************************************
+	 * @TODO MICHAEL!!! Figure out why this isn't creating the file.
+	 * Run tests - check generateFormattedImage
+	 */
 	public function writeTo($filename) {
-		$this->makeDir(dirname($filename));
+		$filesystem = $this->getFilesystem();
+
+		// Create the directory
+		$directory = $filesystem->getDirectory($filename);
+		if(!$filesystem->isDir($directory)) {
+			$this->makeDir($directory);
+		}
 
 		if($filename) {
-			if(file_exists($filename)) list($width, $height, $type, $attr) = getimagesize($filename);
-
-			if(file_exists($filename)) unlink($filename);
+			if($filesystem->has($filename)) {
+				list($width, $height, $type, $attr) = getimagesize($filename);
+				$filesystem->delete($filename, true);
+			}
 
 			$ext = strtolower(substr($filename, strrpos($filename,'.')+1));
-			if(!isset($type)) switch($ext) {
-				case "gif": $type = IMAGETYPE_GIF; break;
-				case "jpeg": case "jpg": case "jpe": $type = IMAGETYPE_JPEG; break;
-				default: $type = IMAGETYPE_PNG; break;
+			if(!isset($type)) {
+				switch($ext) {
+					case "gif":
+						$type = IMAGETYPE_GIF;
+						break;
+					case "jpeg":
+					case "jpg":
+					case "jpe":
+						$type = IMAGETYPE_JPEG;
+						break;
+					default:
+						$type = IMAGETYPE_PNG;
+				}
 			}
 
 			// if $this->interlace != 0, the output image will be interlaced
 			imageinterlace ($this->gd, $this->interlace);
 
 			// if the extension does not exist, the file will not be created!
-
 			switch($type) {
-				case IMAGETYPE_GIF: imagegif($this->gd, $filename); break;
-				case IMAGETYPE_JPEG: imagejpeg($this->gd, $filename, $this->quality); break;
-
-				// case 3, and everything else
+				case IMAGETYPE_GIF:
+					imagegif($this->gd, $filename);
+					break;
+				case IMAGETYPE_JPEG:
+					imagejpeg($this->gd, $filename, $this->quality);
+					break;
 				default:
-					// Save them as 8-bit images
-					// imagetruecolortopalette($this->gd, false, 256);
-					imagepng($this->gd, $filename); break;
+					imagepng($this->gd, $filename);
 			}
-			if(file_exists($filename)) @chmod($filename,0664);
 
 			// Remove image manipulation from cache now that it's complete
 			$cacheData = unserialize($this->cache->load($this->cacheKey));
@@ -540,10 +569,10 @@ class GDBackend extends Object implements Image_Backend {
 	 * @return void
 	 */
 	public function onBeforeDelete($frontend) {
-		$file = Director::baseFolder() . "/" . $frontend->Filename;
+		$file = $frontend->getFullPath();
 
-		if (file_exists($file)) {
-			$key = md5(implode('_', array($file, filemtime($file))));
+		if ($this->getFilesystem()->has($file)) {
+			$key = md5(implode('_', array($file, $this->getFilesystem()->getLastModified($file))));
 			$this->cache->remove($key);
 		}
 	}

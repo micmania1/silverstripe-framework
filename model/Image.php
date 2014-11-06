@@ -128,7 +128,7 @@ class Image extends File {
 	 * @return string
 	 */
 	public function getTag() {
-		if(file_exists(Director::baseFolder() . '/' . $this->Filename)) {
+		if($this->getFilesystem()->has($this->Filename)) {
 			$url = $this->getURL();
 			$title = ($this->Title) ? $this->Title : $this->Filename;
 			if($this->Title) {
@@ -170,14 +170,10 @@ class Image extends File {
 		}
 
 		$class = $this->class;
+		$filesystem = $this->getFilesystem();
 
-		// Create a folder
-		if(!file_exists(ASSETS_PATH)) {
-			mkdir(ASSETS_PATH, Config::inst()->get('Filesystem', 'folder_create_mask'));
-		}
-
-		if(!file_exists(ASSETS_PATH . "/$class")) {
-			mkdir(ASSETS_PATH . "/$class", Config::inst()->get('Filesystem', 'folder_create_mask'));
+		if(!$filesystem->has($class)) {
+			$filesystem->createDir($class);
 		}
 
 		// Generate default filename
@@ -185,9 +181,9 @@ class Image extends File {
 		$file = $nameFilter->filter($tmpFile['name']);
 		if(!$file) $file = "file.jpg";
 
-		$file = ASSETS_PATH . "/$class/$file";
+		$file = $class . '/' . $file;
 
-		while(file_exists(BASE_PATH . "/$file")) {
+		while($filesystem->has($file)) {
 			$i = $i ? ($i+1) : 2;
 			$oldFile = $file;
 			$file = preg_replace('/[0-9]*(\.[^.]+$)/', $i . '\\1', $file);
@@ -420,11 +416,12 @@ class Image extends File {
 	 */
 	public function getFormattedImage($format) {
 		$args = func_get_args();
+		$filesystem = $this->getFilesystem();
 
-		if($this->ID && $this->Filename && Director::fileExists($this->Filename)) {
+		if($this->ID && $this->Filename && $filesystem->has($this->getFilename())) {
 			$cacheFile = call_user_func_array(array($this, "cacheFilename"), $args);
 
-			if(!file_exists(Director::baseFolder()."/".$cacheFile) || isset($_GET['flush'])) {
+			if(!$filesystem->has($cacheFile) || isset($_GET['flush'])) {
 				call_user_func_array(array($this, "generateFormattedImage"), $args);
 			}
 
@@ -446,7 +443,8 @@ class Image extends File {
 	public function cacheFilename($format) {
 		$args = func_get_args();
 		array_shift($args);
-		$folder = $this->ParentID ? $this->Parent()->Filename : ASSETS_DIR . "/";
+		$filesystem = $this->getFilesystem();
+		$folder = $this->ParentID ? $this->Parent()->Filename : '';
 
 		$format = $format . base64_encode(json_encode($args, JSON_NUMERIC_CHECK));
 		$filename = $format . "-" . $this->Name;
@@ -456,7 +454,12 @@ class Image extends File {
 				. ' that should be used to cache a resized image is invalid');
 		}
 
-		return $folder . "_resampled/" . $filename;
+		$path = implode('/', array_filter(array(
+			$folder,
+			'_resampled',
+			$filename
+		)));
+		return $filesystem->makeAbsolute($path);
 	}
 
 	/**
@@ -472,7 +475,7 @@ class Image extends File {
 		$cacheFile = call_user_func_array(array($this, "cacheFilename"), $args);
 
 		$backend = Injector::inst()->createWithArgs(self::config()->backend, array(
-			Director::baseFolder()."/" . $this->Filename,
+			$this->getFullPath(),
 			$args
 		));
 
@@ -486,7 +489,7 @@ class Image extends File {
 
 				$backend = call_user_func_array(array($this, $generateFunc), $args);
 				if($backend){
-					$backend->writeTo(Director::baseFolder()."/" . $cacheFile);
+					$backend->writeTo($cacheFile);
 				}
 
 			} else {
@@ -585,19 +588,14 @@ class Image extends File {
 		$generatedImages = array();
 		$cachedFiles = array();
 
-		$folder = $this->ParentID ? $this->Parent()->Filename : ASSETS_DIR . '/';
-		$cacheDir = Director::getAbsFile($folder . '_resampled/');
+		$folder = $this->ParentID ? $this->Parent()->Filename : '';
+		$cacheDir = $folder->getFilename() . '/_resampled/';
 
-		if(is_dir($cacheDir)) {
-			if($handle = opendir($cacheDir)) {
-				while(($file = readdir($handle)) !== false) {
-					// ignore all entries starting with a dot
-					if(substr($file, 0, 1) != '.' && is_file($cacheDir . $file)) {
-						$cachedFiles[] = $file;
-					}
-				}
-				closedir($handle);
-			}
+		$filesystem = $this->getFilesystem();
+		if($filesystem->isDir($cacheDir)) {
+			$contents = $filesystem->listContents($cacheDir);
+			print_r($contents);
+			exit;
 		}
 
 		$pattern = $this->getFilenamePatterns($this->Name);
@@ -635,8 +633,8 @@ class Image extends File {
 	public function regenerateFormattedImages() {
 		if(!$this->Filename) return 0;
 
-			// Without this, not a single file would be written
-			// caused by a check in getFormattedImage()
+		// Without this, not a single file would be written
+		// caused by a check in getFormattedImage()
 		$_GET['flush'] = 1;
 
 		$numGenerated = 0;
@@ -668,7 +666,7 @@ class Image extends File {
 		$numDeleted = 0;
 		$generatedImages = $this->getGeneratedImages();
 		foreach($generatedImages as $singleImage) {
-			unlink($singleImage['FileName']);
+			$this->getFilesystem()->delete($singleImage['FileName']);
 			$numDeleted++;
 		}
 
@@ -682,14 +680,13 @@ class Image extends File {
 	 * @return string|int
 	 */
 	public function getDimensions($dim = "string") {
-		if($this->getField('Filename')) {
-
-			$imagefile = Director::baseFolder() . '/' . $this->getField('Filename');
-			if(file_exists($imagefile)) {
-				$size = getimagesize($imagefile);
-				return ($dim === "string") ? "$size[0]x$size[1]" : $size[$dim];
+		$return = null;
+		if($this->getFilename()) {
+			if($this->getFilesystem()->has($this->getFilename())) {
+				$size = getimagesize($this->getFullPath());
+				return ($dim === "string") ? $size[0] . 'x' . $size[1] : $size[$dim];
 			} else {
-				return ($dim === "string") ? "file '$imagefile' not found" : null;
+				return ($dim === "string") ? 'file ' . $this->getFilename() . ' not found.' : null;
 			}
 		}
 	}
@@ -763,10 +760,6 @@ class Image_Cached extends Image {
 		$this->Filename = $filename;
 	}
 
-	public function getRelativePath() {
-		return $this->getField('Filename');
-	}
-
 	/**
 	 * Prevent creating new tables for the cached record
 	 *
@@ -783,5 +776,13 @@ class Image_Cached extends Image {
 	 */
 	public function write($showDebug = false, $forceInsert = false, $forceWrite = false, $writeComponents = false) {
 		throw new Exception("{$this->ClassName} can not be written back to the database.");
+	}
+
+	/**
+	 * Does not change the filesystem itself.
+	 */
+	public function setParentID($parentID) {
+		$this->setField('ParentID', (int)$parentID);
+		return $this->getField('ParentID');
 	}
 }
