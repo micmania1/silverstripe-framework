@@ -124,11 +124,9 @@ An example using the `MyFactory` service to create instances of the `MyService` 
 	:::yml
 	Injector:
 	  MyService:
-	    factory: MyFactory
-	  MyFactory:
-	    class: MyFactoryImplementation
+	    factory: MyFactoryImplementation
 
-**mysite/code/MyFactoryImplementation.php**
+**mysite/code/MyFactory.php**
 
 	:::php
 	<?php
