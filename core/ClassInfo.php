@@ -154,7 +154,11 @@ class ClassInfo {
 		if (!is_string($class)) $class = get_class($class);
 
 		$cacheKey = $class . '_' . (string)$tablesOnly;
-		$parent = $class;
+
+		// We need to ensure we're using the correct classname - case-sensitivity is important
+		$reflection = new ReflectionClass($class);
+		$parent = $reflection->name;
+		
 		if(!isset(self::$_cache_ancestry[$cacheKey])) {
 			$ancestry = array();
 			do {

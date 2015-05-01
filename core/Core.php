@@ -108,8 +108,8 @@ if(file_exists(BASE_PATH . '/vendor/autoload.php')) {
 	require_once BASE_PATH . '/vendor/autoload.php';
 }
 
-// Now that the class manifest is up, load the configuration
-$configManifest = new SS_ConfigStaticManifest(BASE_PATH, false, $flush);
+// Now that the class manifest is up, load the static configuration
+$configManifest = new SS_ConfigStaticManifest();
 Config::inst()->pushConfigStaticManifest($configManifest);
 
 // Now that the class manifest is up, load the configuration
