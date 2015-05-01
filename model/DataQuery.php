@@ -195,7 +195,6 @@ class DataQuery {
 		} else {
 			$tableClasses = $ancestorTables;
 		}
-
 		$tableNames = array_keys($tableClasses);
 		$baseClass = $tableNames[0];
 
@@ -224,6 +223,8 @@ class DataQuery {
 				$query->addLeftJoin($tableClass, "\"$tableClass\".\"ID\" = \"$baseClass\".\"ID\"", $tableClass, 10);
 			}
 		}
+
+
 
 		// Resolve colliding fields
 		if($this->collidingFields) {

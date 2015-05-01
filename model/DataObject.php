@@ -2742,6 +2742,10 @@ class DataObject extends ViewableData implements DataObjectInterface, i18nEntity
 	public static function has_own_table($dataClass) {
 		if(!is_subclass_of($dataClass,'DataObject')) return false;
 
+		// Ensure we're using the correct class name - case-sensitivity is important.
+		$reflection = new ReflectionClass($dataClass);
+		$dataClass = $reflection->name;
+
 		if(!isset(DataObject::$cache_has_own_table[$dataClass])) {
 			if(get_parent_class($dataClass) == 'DataObject') {
 				DataObject::$cache_has_own_table[$dataClass] = true;
