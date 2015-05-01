@@ -198,6 +198,8 @@ class DataQuery {
 			}
 		}
 
+
+
 		// Resolve colliding fields
 		if($this->collidingFields) {
 			foreach($this->collidingFields as $k => $collisions) {
