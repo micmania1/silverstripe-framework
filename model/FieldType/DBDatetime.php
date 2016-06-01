@@ -42,9 +42,9 @@ class DBDatetime extends DBDate implements TemplateGlobalProvider {
 	 * @see Time::nice_format
 	 */
 	private static $nice_format = 'd/m/Y g:ia';
-	
+
 	public function setValue($value, $record = null, $markChanged = true) {
-		if($value === false || $value === null || (is_string($value) && !strlen($value))) {
+		if($value == false || $value == null || (is_string($value) && !strlen($value))) {
 			// don't try to evaluate empty values with strtotime() below, as it returns "1970-01-01" when it should be
 			// saved as NULL in database
 			$this->value = null;
@@ -72,7 +72,7 @@ class DBDatetime extends DBDate implements TemplateGlobalProvider {
 	}
 
 	/**
-	 * Returns the date and time in the format specified by the config value nice_format, or 'd/m/Y g:ia' 
+	 * Returns the date and time in the format specified by the config value nice_format, or 'd/m/Y g:ia'
 	 * by default (e.g. '31/01/2014 2:23pm').
 	 * @return string Formatted date and time.
 	 */
