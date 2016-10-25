@@ -5,78 +5,17 @@ namespace SilverStripe\Core\Config;
 use SilverStripe\Core\Object;
 use SilverStripe\Core\Manifest\ConfigStaticManifest;
 use SilverStripe\Core\Manifest\ConfigManifest;
+use micmania1\config\ConfigCollectionInterface;
+use micmania1\config\ConfigCollection;
 use UnexpectedValueException;
 use stdClass;
 
-/**
- * The configuration system works like this:
- *
- * Each class has a set of named properties
- *
- * Each named property can contain either
- *
- * - An array
- * - A non-array value
- *
- * If the value is an array, each value in the array may also be one of those
- * three types.
- *
- * A property can have a value specified in multiple locations, each of which
- * have a hard coded or explicit priority. We combine all these values together
- * into a "composite" value using rules that depend on the priority order of
- * the locations to give the final value, using these rules:
- *
- * - If the value is an array, each array is added to the _beginning_ of the
- *	composite array in ascending priority order. If a higher priority item has
- *	a non-integer key which is the same as a lower priority item, the value of
- * 	those items  is merged using these same rules, and the result of the merge
- *	is located in the same location the higher priority item would be if there
- *	was no key clash. Other than in this key-clash situation, within the
- * 	particular array, order is preserved.
- *
- * - If the value is not an array, the highest priority value is used without
- *	any attempt to merge.
- *
- * It is an error to have mixed types of the same named property in different
- * locations (but an error will not necessarily be raised due to optimizations
- * in the lookup code).
- *
- * The exception to this is "false-ish" values - empty arrays, empty strings,
- * etc. When merging a non-false-ish value with a false-ish value, the result
- * will be the non-false-ish value regardless of priority. When merging two
- * false-ish values the result will be the higher priority false-ish value.
- *
- * The locations that configuration values are taken from in highest -> lowest
- * priority order.
- *
- * - Any values set via a call to Config#update.
- *
- * - The configuration values taken from the YAML files in _config directories
- *	(internally sorted in before / after order, where the item that is latest
- *	is highest priority).
- *
- * - Any static set on an "additional static source" class (such as an
- *	extension) named the same as the name of the property.
- *
- * - Any static set on the class named the same as the name of the property.
- *
- * - The composite configuration value of the parent class of this class.
- *
- * At some of these levels you can also set masks. These remove values from the
- * composite value at their priority point rather than add. They are much
- * simpler. They consist of a list of key / value pairs. When applied against
- * the current composite value:
- *
- * - If the composite value is a sequential array, any member of that array
- *	that matches any value in the mask is removed.
- *
- * - If the composite value is an associative array, any member of that array
- *	that matches both the key and value of any pair in the mask is removed.
- *
- * - If the composite value is not an array, if that value matches any value
- * in the mask it is removed.
- */
 class Config {
+
+	/**
+	 * @var ConfigCollectionInterface
+	 */
+	protected $collection;
 
 	/**
 	 * A marker instance for the "anything" singleton value. Don't access
@@ -270,8 +209,9 @@ class Config {
 	 * Each copy of the Config object need's it's own cache, so changes don't
 	 * leak through to other instances.
 	 */
-	public function __construct() {
-		$this->cache = new Config_MemCache();
+	public function __construct($collection) {
+		$this->collection = $collection;
+		$this->cache = new ConfigCollection;
 	}
 
 	public function __clone() {
@@ -488,85 +428,6 @@ class Config {
 		$this->cache->clean("__{$class}");
 	}
 
-	protected function getUncached($class, $name, $sourceOptions, &$result, $suppress, &$tags) {
-		$tags[] = "__{$class}";
-		$tags[] = "__{$class}__{$name}";
-
-		// If result is already not something to merge into, just return it
-		if ($result !== null && !is_array($result)) return $result;
-
-		// First, look through the override values
-		foreach($this->overrides as $k => $overrides) {
-			if (isset($overrides[$class][$name])) {
-				$value = $overrides[$class][$name];
-
-				self::merge_low_into_high($result, $value, $suppress);
-				if ($result !== null && !is_array($result)) return $result;
-			}
-
-			if (isset($this->suppresses[$k][$class][$name])) {
-				$suppress = $suppress
-					? array_merge($suppress, $this->suppresses[$k][$class][$name])
-					: $this->suppresses[$k][$class][$name];
-			}
-		}
-
-		$nothing = null;
-
-		// Then the manifest values
-		foreach($this->manifests as $manifest) {
-			$value = $manifest->get($class, $name, $nothing);
-			if ($value !== $nothing) {
-				self::merge_low_into_high($result, $value, $suppress);
-				if ($result !== null && !is_array($result)) return $result;
-			}
-		}
-
-		$sources = array($class);
-
-		// Include extensions only if not flagged not to, and some have been set
-		if (($sourceOptions & self::EXCLUDE_EXTRA_SOURCES) != self::EXCLUDE_EXTRA_SOURCES) {
-			// If we don't have a fresh list of extra sources, get it from the class itself
-			if (!array_key_exists($class, $this->extraConfigSources)) {
-				$this->extraConfigSources[$class] = Object::get_extra_config_sources($class);
-			}
-
-			// Update $sources with any extra sources
-			$extraSources = $this->extraConfigSources[$class];
-			if ($extraSources) $sources = array_merge($sources, $extraSources);
-		}
-
-		$value = $nothing = null;
-
-		foreach ($sources as $staticSource) {
-			if (is_array($staticSource)) {
-				$value = isset($staticSource[$name]) ? $staticSource[$name] : $nothing;
-			}
-			else {
-				foreach ($this->staticManifests as $i => $statics) {
-					$value = $statics->get($staticSource, $name, $nothing);
-					if ($value !== $nothing) break;
-				}
-			}
-
-			if ($value !== $nothing) {
-				self::merge_low_into_high($result, $value, $suppress);
-				if ($result !== null && !is_array($result)) return $result;
-			}
-		}
-
-		// Finally, merge in the values from the parent class
-		if (
-			($sourceOptions & self::UNINHERITED) != self::UNINHERITED &&
-			(($sourceOptions & self::FIRST_SET) != self::FIRST_SET || $result === null)
-		) {
-			$parent = get_parent_class($class);
-			if ($parent) $this->getUncached($parent, $name, $sourceOptions, $result, $suppress, $tags);
-		}
-
-		return $result;
-	}
-
 	/**
 	 * Get the config value associated for a given class and property
 	 *
@@ -594,19 +455,67 @@ class Config {
 	 * @return mixed The value of the config item, or null if no value set. Could be an associative array,
 	 *                      sequential array or scalar depending on value (see class docblock)
 	 */
-	public function get($class, $name, $sourceOptions = 0, &$result = null, $suppress = null) {
-		// Have we got a cached value? Use it if so
+	protected $values = [];
+	public function get($class, $name, $sourceOptions = 0) {
 		$key = $class.$name.$sourceOptions;
-
-		list($cacheHit, $result) = $this->cache->checkAndGet($key);
-		if (!$cacheHit) {
-			$tags = array();
-			$result = null;
-			$this->getUncached($class, $name, $sourceOptions, $result, $suppress, $tags);
-			$this->cache->set($key, $result, $tags);
+		if(isset($this->values[$key])) {
+			return $this->values[$key];
 		}
 
-		return $result;
+		$class = strtolower($class);
+		$classConfig = $this->collection->get($class);
+		$value = isset($classConfig[$name]) ? $classConfig[$name] : null;
+
+		// If we have a non-array and non-null value we're done here. We can't merge anything
+		// after that and this class instance takes priority.
+		if(!is_array($value) && !is_null($value)) {
+			return $this->values[$key] = $value;
+		}
+
+		// Include any extensions if applicable
+		if (($sourceOptions & self::EXCLUDE_EXTRA_SOURCES) != self::EXCLUDE_EXTRA_SOURCES) {
+			$extensions = isset($classConfig['extensions']) ? $classConfig['extensions'] : null;
+			if(is_array($extensions)) {
+				foreach($extensions as $extensionClass) {
+					if($includeExtensions) {
+						$mask = self::UNINHERITED | self::EXCLUDE_EXTRA_SOURCES;
+					} else {
+						$mask = self::UNINHERITED;
+					}
+
+					$extraConfig = $this->get($extensionClass, $name, $mask);
+					if (is_null($extraConfig)) {
+						continue;
+					}
+
+					if (!is_array($extraConfig)) {
+						throw new \Exception('Trying to merge non-array into an array');
+					}
+
+					$value = array_merge($extraConfig, $value);
+				}
+			}
+		}
+
+        if (
+            ($sourceOptions & self::UNINHERITED) != self::UNINHERITED &&
+            (($sourceOptions & self::FIRST_SET) != self::FIRST_SET || $result === null)
+        ) {
+			$parent = $class;
+			while($parent = get_parent_class($parent)) {
+				$parentValue = $this->get($parent, $name, self::UNINHERITED);
+
+				// If its not an array we can't merge so the value is considered final
+				if(!is_array($parentValue)) {
+					break;
+				}
+
+				// Merge the parent value into the current value (current value takes priority)
+				$value = array_merge($parentValue, $value);
+			}
+		}
+
+		return $this->values[$key] = $value;
 	}
 
 	/**
