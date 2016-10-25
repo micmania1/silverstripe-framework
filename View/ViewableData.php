@@ -263,8 +263,8 @@ class ViewableData extends Object implements IteratorAggregate {
 			$cast = $failover->castingHelper($field);
 			if($cast) {
 				return $cast;
+			}
 		}
-	}
 
 		// Fall back to default_cast
 		return $this->config()->get('default_cast');

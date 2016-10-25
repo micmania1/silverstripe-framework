@@ -9,6 +9,17 @@ use SilverStripe\Core\Manifest\ConfigManifest;
 use SilverStripe\Control\Director;
 use SilverStripe\i18n\i18n;
 
+// new config stuff
+use micmania1\config\CachedConfigCollection;
+use micmania1\config\Transformer\YamlTransformer;
+use micmania1\config\Transformer\PrivateStaticTransformer;
+use Symfony\Component\Finder\Finder;
+// Temp (for testing)
+use micmania1\config\ConfigCollection;
+use SilverStripe\Control\Controller;
+use SilverStripe\View\ViewableData;
+
+
 /**
  * This file is the Framework bootstrap.  It will get your environment ready to call Director::direct().
  *
@@ -53,11 +64,6 @@ mb_regex_encoding('UTF-8');
  */
 gc_enable();
 
-// Initialise the dependency injector as soon as possible, as it is
-// subsequently used by some of the following code
-$injector = new Injector(array('locator' => 'SilverStripe\\Core\\Injector\\SilverStripeServiceConfigurationLocator'));
-Injector::set_inst($injector);
-
 ///////////////////////////////////////////////////////////////////////////////
 // MANIFEST
 
@@ -75,13 +81,69 @@ $loader = ClassLoader::instance();
 $loader->registerAutoloader();
 $loader->pushManifest($manifest);
 
-// Now that the class manifest is up, load the static configuration
-$configManifest = new ConfigStaticManifest();
-Config::inst()->pushConfigStaticManifest($configManifest);
+// include '/vagrant/xhprof/inc/prepend.php';
 
-// And then the yaml configuration
-$configManifest = new ConfigManifest(BASE_PATH, false, $flush);
-Config::inst()->pushConfigYamlManifest($configManifest);
+// Tell the YAML Transformer where to look for YAML files
+$baseDir = realpath(dirname(dirname(__DIR__)));
+$finder = new Finder();
+$finder->in($baseDir . '/*/_config')
+    ->files()
+    ->name('/\.(yml|yaml)$/');
+
+// Setup cache
+$driver = new Stash\Driver\Filesystem();
+// $driver = new Stash\Driver\Ephemeral();
+$pool = new Stash\Pool($driver);
+
+$collection = new CachedConfigCollection($pool, true);
+// $collection = new ConfigCollection;
+$config = new Config($collection);
+Config::set_instance($config);
+
+// $flush = true;
+if($flush) {
+	$collection->deleteAll();
+
+	$classes = array_keys($loader->getManifest()->getClasses());
+
+    // Setup private static transformer
+    $statics = new PrivateStaticTransformer($classes, $collection);
+
+    // Create the YAML transformer
+    $yaml = new YamlTransformer($baseDir, $finder, $collection);
+
+    // Add some rules for only/except statements
+    $yaml->addRule('classexists', function($class) {
+        return class_exists($class);
+    });
+    $yaml->addRule('envvarset', function($var) {
+        return getenv($var) !== FALSE;
+    });
+    $yaml->addRule('constantdefined', function($const) {
+        return defined($const);
+    });
+    $yaml->addRule('environment', function($type) {
+		return Director::get_environment_type() === $type;
+    });
+
+    // Setup config
+    $statics->transform();
+    $yaml->transform();
+}
+
+$injector = new Injector(array('locator' => 'SilverStripe\\Core\\Injector\\SilverStripeServiceConfigurationLocator'));
+Injector::set_inst($injector);
+
+// Include _config.php's
+$finder = new Finder();
+$finder->in($baseDir)
+    ->files()
+	->depth(1)
+    ->name('_config.php');
+
+foreach($finder as $file) {
+	require_once($file);
+}
 
 // Load template manifest
 SilverStripe\View\ThemeResourceLoader::instance()->addSet('$default', new SilverStripe\View\ThemeManifest(

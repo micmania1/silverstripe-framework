@@ -73,10 +73,6 @@ if(defined('SS_ENVIRONMENT_FILE')) {
 	}
 }
 
-if(defined('SS_ENVIRONMENT_TYPE')) {
-	Director::config()->environment_type = SS_ENVIRONMENT_TYPE;
-}
-
 global $database;
 
 // No database provided

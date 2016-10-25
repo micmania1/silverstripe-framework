@@ -119,16 +119,18 @@ trait Extensible {
 			$extensions = Config::inst()->get($class, 'extensions',
 				Config::UNINHERITED | Config::EXCLUDE_EXTRA_SOURCES);
 
-			if($extensions) foreach($extensions as $extension) {
-				$instance = Object::create_from_string($extension);
-				$instance->setOwner(null, $class);
-				$this->extension_instances[$instance->class] = $instance;
+			if($extensions) {
+				foreach($extensions as $extension) {
+					$instance = Object::create_from_string($extension);
+					$instance->setOwner(null, $class);
+					$this->extension_instances[$instance->class] = $instance;
+				}
 			}
-		}
 
-		if(!isset(self::$classes_constructed[$class])) {
-			$this->defineMethods();
-			self::$classes_constructed[$class] = true;
+			if(!isset(self::$classes_constructed[$class])) {
+				$this->defineMethods();
+				self::$classes_constructed[$class] = true;
+			}
 		}
 	}
 
