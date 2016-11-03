@@ -79,8 +79,8 @@ class AdminRootController extends Controller implements TemplateGlobalProvider {
 	 * @param string $controllerClass Name of class
 	 */
 	protected static function add_rule_for_controller($controllerClass) {
-		$urlSegment = Config::inst()->get($controllerClass, 'url_segment', Config::FIRST_SET);
-		$urlRule    = Config::inst()->get($controllerClass, 'url_rule', Config::FIRST_SET);
+		$urlSegment = Config::inst()->get($controllerClass, 'url_segment');
+		$urlRule    = Config::inst()->get($controllerClass, 'url_rule');
 
 		if($urlSegment) {
 			// Make director rule

@@ -306,7 +306,6 @@ trait Extensible {
 
 		// Get a list of extensions
 		$extensions = Config::inst()->get($class, 'extensions', Config::UNINHERITED | Config::EXCLUDE_EXTRA_SOURCES);
-
 		if(!$extensions) {
 			return null;
 		}

@@ -76,8 +76,10 @@ class SSViewer_DataPresenter extends SSViewer_Scope
 					if (!is_array($details)) {
 						$details = array(
 							'method' => $details,
-							'casting' => Config::inst()->get('SilverStripe\\View\\ViewableData', 'default_cast',
-								Config::FIRST_SET)
+							'casting' => Config::inst()->get(
+								'SilverStripe\\View\\ViewableData',
+								'default_cast'
+							)
 						);
 					}
 
@@ -179,8 +181,10 @@ class SSViewer_DataPresenter extends SSViewer_Scope
 
 					// If not provided, use default
 					if (!$casting) {
-						$casting = Config::inst()->get('SilverStripe\\View\\ViewableData', 'default_cast',
-							Config::FIRST_SET);
+						$casting = Config::inst()->get(
+							'SilverStripe\\View\\ViewableData',
+							'default_cast'
+						);
 					}
 
 					$obj = Injector::inst()->get($casting, false, array($property));

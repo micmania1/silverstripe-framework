@@ -25,7 +25,7 @@ trait Configurable {
 	 * @return mixed
 	 */
 	public function stat($name) {
-		return Config::inst()->get(get_class($this), $name, Config::FIRST_SET);
+		return Config::inst()->get(get_class($this), $name);
 	}
 
 	/**

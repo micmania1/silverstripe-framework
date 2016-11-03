@@ -1,5 +1,8 @@
 <?php
 
+require '/vagrant/xhprofgui/external/header.php';
+// require '/vagrant/xhprof/inc/prepend.php';
+
 use SilverStripe\ORM\DB;
 use SilverStripe\ORM\DataModel;
 use SilverStripe\Security\Security;
@@ -200,3 +203,5 @@ if(!isset($databaseConfig) || !isset($databaseConfig['database']) || !$databaseC
 // Direct away - this is the "main" function, that hands control to the appropriate controller
 DataModel::set_inst(new DataModel());
 Director::direct($url, DataModel::inst());
+
+// require '/vagrant/xhprof/inc/append.php';

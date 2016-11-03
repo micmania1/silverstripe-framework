@@ -450,7 +450,7 @@ class LeftAndMain extends Controller implements PermissionProvider {
 	 */
 	public static function getRequiredPermissions() {
 		$class = get_called_class();
-		$code = Config::inst()->get($class, 'required_permission_codes', Config::FIRST_SET);
+		$code = Config::inst()->get($class, 'required_permission_codes');
 		if ($code === false) {
 			return false;
 		}
@@ -720,7 +720,7 @@ class LeftAndMain extends Controller implements PermissionProvider {
 	public function Link($action = null) {
 		// Handle missing url_segments
 		if($this->config()->url_segment) {
-			$segment = $this->config()->get('url_segment', Config::FIRST_SET);
+			$segment = $this->config()->get('url_segment');
 		} else {
 			$segment = $this->class;
 		};
@@ -760,7 +760,7 @@ class LeftAndMain extends Controller implements PermissionProvider {
 		}
 
 		// Get default class title
-		$title = Config::inst()->get($class, 'menu_title', Config::FIRST_SET);
+		$title = Config::inst()->get($class, 'menu_title');
 		if(!$title) {
 			$title = preg_replace('/Admin$/', '', $class);
 		}
@@ -780,7 +780,7 @@ class LeftAndMain extends Controller implements PermissionProvider {
 	 * @return string
 	 */
 	public static function menu_icon_for_class($class) {
-		$icon = Config::inst()->get($class, 'menu_icon', Config::FIRST_SET);
+		$icon = Config::inst()->get($class, 'menu_icon');
 		if (!empty($icon)) {
 			$class = strtolower(Convert::raw2htmlname(str_replace('\\', '-', $class)));
 			return ".icon.icon-16.icon-{$class} { background-image: url('{$icon}'); } ";

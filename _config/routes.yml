@@ -1,16 +1,12 @@
 ---
 Name: rootroutes
-Before: '*'
 ---
 SilverStripe\Control\Director:
   rules:
     '': SilverStripe\Control\Controller
 ---
 Name: coreroutes
-Before: '*'
-After:
-  - '#rootroutes'
-  - '#modelascontrollerroutes'
+After: '#rootroutes'
 ---
 SilverStripe\Control\Director:
   rules:
@@ -23,11 +19,7 @@ SilverStripe\Control\Director:
     'SapphireREPL//$Action/$ID/$OtherID': SilverStripe\Dev\SapphireREPL
 ---
 Name: adminroutes
-Before: '*'
-After:
-  - '#rootroutes'
-  - '#coreroutes'
-  - '#modelascontrollerroutes'
+Before: '#modelascontrollerroutes'
 ---
 SilverStripe\Control\Director:
   rules:

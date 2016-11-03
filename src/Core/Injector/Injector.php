@@ -555,6 +555,7 @@ class Injector {
 		}
 
 		$factory = isset($spec['factory']) ? $this->get($spec['factory']) : $this->getObjectCreator();
+
 		$object = $factory->create($class, $constructorParams);
 
 		// figure out if we have a specific id set or not. In some cases, we might be instantiating objects

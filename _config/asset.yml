@@ -53,8 +53,7 @@ SilverStripe\Core\Injector\Injector:
       AssetHandler: '%$GeneratedAssetHandler'
 ---
 Name: coreassetroutes
-After:
-  - '#coreassets'
+Before: '#modelascontrollerroutes'
 ---
 SilverStripe\Control\Director:
   rules:

@@ -11,11 +11,31 @@ class Config_ForClass
 	protected $class;
 
 	/**
+	 * key/value array of config
+	 *
+	 * @var array
+	 */
+	protected $config;
+
+	/**
+	 * A flag to know if we've initialised this class
+	 *
+	 * @var boolean
+	 */
+	protected $init = false;
+
+	/**
 	 * @param string $class
 	 */
 	public function __construct($class)
 	{
 		$this->class = $class;
+	}
+
+	protected function init()
+	{
+		$this->config = Config::inst()->get($this->class);
+		$this->init = true;
 	}
 
 	/**
@@ -24,7 +44,12 @@ class Config_ForClass
 	 */
 	public function __get($name)
 	{
-		return $this->get($name);
+		if(!$this->init) {
+			$this->init();
+		}
+
+		$name = strtolower($name);
+		return isset($this->config[$name]) ? $this->config[$name] : null;
 	}
 
 	/**
@@ -55,8 +80,8 @@ class Config_ForClass
 	 */
 	public function __isset($name)
 	{
-		$val = $this->__get($name);
-		return isset($val);
+		$name = strtolower($name);
+		return isset($this->config[$name]);
 	}
 
 	/**

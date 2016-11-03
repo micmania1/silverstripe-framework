@@ -96,7 +96,7 @@ class AssetAdapter extends Local {
 		list($type) = explode('/', strtolower($type));
 
 		// Determine configurations to write
-		$rules = Config::inst()->get(get_class($this), 'server_configuration', Config::FIRST_SET);
+		$rules = Config::inst()->get(get_class($this), 'server_configuration');
 		if(empty($rules[$type])) {
 			return;
 		}
