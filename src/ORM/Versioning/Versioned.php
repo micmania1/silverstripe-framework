@@ -611,7 +611,7 @@ class Versioned extends DataExtension implements TemplateGlobalProvider {
 			$fields = $schema->databaseFields($class, false);
 			unset($fields['ID']);
 			if($fields) {
-				$options = Config::inst()->get($class, 'create_table_options', Config::FIRST_SET);
+				$options = Config::inst()->get($class, 'create_table_options');
 				$indexes = $owner->databaseIndexes();
 				$extensionClass = $allSuffixes[$suffix];
 				if ($suffix && ($extension = $owner->getExtensionInstance($extensionClass))) {
@@ -1347,7 +1347,7 @@ class Versioned extends DataExtension implements TemplateGlobalProvider {
 		}
 
 		// Fall back to default permission check
-		$permissions = Config::inst()->get($owner->class, 'non_live_permissions', Config::FIRST_SET);
+		$permissions = Config::inst()->get($owner->class, 'non_live_permissions');
 		$check = Permission::checkMember($member, $permissions);
 		return (bool)$check;
 	}

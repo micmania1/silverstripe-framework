@@ -74,7 +74,7 @@ if(defined('SS_ENVIRONMENT_FILE')) {
 }
 
 if(defined('SS_ENVIRONMENT_TYPE')) {
-	Director::config()->environment_type = SS_ENVIRONMENT_TYPE;
+	Director::set_environment_type(SS_ENVIRONMENT_TYPE);
 }
 
 global $database;
@@ -125,10 +125,10 @@ if(defined('SS_DATABASE_USERNAME') && defined('SS_DATABASE_PASSWORD')) {
 }
 
 if(defined('SS_SEND_ALL_EMAILS_TO')) {
-	Email::config()->send_all_emails_to = SS_SEND_ALL_EMAILS_TO;
+	// Email::config()->send_all_emails_to = SS_SEND_ALL_EMAILS_TO;
 }
 if(defined('SS_SEND_ALL_EMAILS_FROM')) {
-	Email::config()->send_all_emails_from = SS_SEND_ALL_EMAILS_FROM;
+	// Email::config()->send_all_emails_from = SS_SEND_ALL_EMAILS_FROM;
 }
 
 if(defined('SS_DEFAULT_ADMIN_USERNAME')) {

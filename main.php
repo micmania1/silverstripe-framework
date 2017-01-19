@@ -1,7 +1,8 @@
 <?php
 
-require '/vagrant/xhprofgui/external/header.php';
+// require '/vagrant/xhprofgui/external/header.php';
 // require '/vagrant/xhprof/inc/prepend.php';
+require '/vagrant/xhgui/external/header.php';
 
 use SilverStripe\ORM\DB;
 use SilverStripe\ORM\DataModel;

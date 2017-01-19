@@ -80,14 +80,14 @@ class Director implements TemplateGlobalProvider {
 	 *
 	 * @var array
 	 */
-	private static $dev_servers = array();
+	protected static $dev_servers = array();
 
 	/**
 	 * @config
 	 *
 	 * @var array
 	 */
-	private static $test_servers = array();
+	protected static $test_servers = array();
 
 	/**
 	 * Setting this explicitly specifies the protocol ("http" or "https") used, overriding the normal
@@ -112,7 +112,7 @@ class Director implements TemplateGlobalProvider {
 	 *
 	 * @var string
 	 */
-	private static $environment_type;
+	protected static $environment_type;
 
 	/**
 	 * Process the given URL, creating the appropriate controller and executing it.
@@ -1079,8 +1079,7 @@ class Director implements TemplateGlobalProvider {
 			user_error("Director::set_environment_type passed '$et'.  It should be passed dev, test, or live",
 				E_USER_WARNING);
 		} else {
-			Deprecation::notice('4.0', 'Use the "Director.environment_type" config setting instead');
-			Config::inst()->update('SilverStripe\\Control\\Director', 'environment_type', $et);
+			self::$environment_type = $et;
 		}
 	}
 
@@ -1120,13 +1119,17 @@ class Director implements TemplateGlobalProvider {
 	 */
 	public static function isDev() {
 		// Check session
-		if ($env = self::session_environment()) return $env === 'dev';
+		if ($env = self::session_environment()) {
+			return $env === 'dev';
+		}
 
 		// Check config
-		if (Config::inst()->get('SilverStripe\\Control\\Director', 'environment_type') === 'dev') return true;
+		if (self::$environment_type === 'dev') {
+			return true;
+		}
 
 		// Check if we are running on one of the test servers
-		$devServers = (array)Config::inst()->get('SilverStripe\\Control\\Director', 'dev_servers');
+		$devServers = self::$dev_servers;
 		if (isset($_SERVER['HTTP_HOST']) && in_array($_SERVER['HTTP_HOST'], $devServers))  {
 			return true;
 		}
@@ -1142,16 +1145,22 @@ class Director implements TemplateGlobalProvider {
 	 */
 	public static function isTest() {
 		// In case of isDev and isTest both being set, dev has higher priority
-		if (self::isDev()) return false;
+		if (self::isDev()) {
+			return false;
+		}
 
 		// Check saved session
-		if ($env = self::session_environment()) return $env === 'test';
+		if ($env = self::session_environment()) {
+			return $env === 'test';
+		}
 
 		// Check config
-		if (Config::inst()->get('SilverStripe\\Control\\Director', 'environment_type') === 'test') return true;
+		if (Director::$environment_type == 'test') {
+			return true;
+		}
 
 		// Check if we are running on one of the test servers
-		$testServers = (array)Config::inst()->get('SilverStripe\\Control\\Director', 'test_servers');
+		$testServers = self::$test_servers;
 		if (isset($_SERVER['HTTP_HOST']) && in_array($_SERVER['HTTP_HOST'], $testServers))  {
 			return true;
 		}

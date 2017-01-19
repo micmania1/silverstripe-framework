@@ -10,6 +10,7 @@ use SilverStripe\Control\Director;
 use SilverStripe\i18n\i18n;
 
 use micmania1\config\CachedConfigCollection;
+use micmania1\config\ConfigCollection;
 use micmania1\config\Transformer\PrivateStaticTransformer;
 use micmania1\config\Transformer\YamlTransformer;
 use Symfony\Component\Finder\Finder;
@@ -17,6 +18,8 @@ use Symfony\Component\Cache\Adapter\PhpFilesAdapter;
 use Symfony\Component\Cache\Adapter\PhpArrayAdapter;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\Cache\Adapter\ApcuAdapter;
+use Symfony\Component\Cache\Adapter\RedisAdapter;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 
 /**
  * This file is the Framework bootstrap.  It will get your environment ready to call Director::direct().
@@ -81,15 +84,28 @@ $loader = ClassLoader::instance();
 $loader->registerAutoloader();
 $loader->pushManifest($manifest);
 
-// $cachePool = new FilesystemAdapter;
-$cachePool = new ApcuAdapter;
 
-$collection = new CachedConfigCollection($cachePool, true);
+// define('SS_CONFIG_COLLECTION', Config::collection);
+// define('SS_CONFIG_ADAPTOR', Config::collection);
+// define('SS_CONFIG_TRACK_METADATA', true);
+
+if(defined('SS_ENVIRONMENT_TYPE') && SS_ENVIRONMENT_TYPE == 'dev') {
+	$collection = new ConfigCollection(SS_CONFIG_TRACK_METADATA);
+	$cachePool = new ArrayAdapter;
+} else {
+	$cachePool = new FilesystemAdapter;
+	// $cachePool = new ApcuAdapter;
+
+	// $redisClient = new Predis\Client();
+	// $cachePool = new RedisAdapter($redisClient);
+
+	$collection = new CachedConfigCollection($cachePool, SS_CONFIG_TRACK_METADATA);
+}
+
 $config = new Config($collection, $cachePool);
 Config::set_instance($config);
 
-// $flush=true;
-if($flush) {
+if($flush || !$collection->get('__CONFIG_FILES__')) {
 	$collection->deleteAll();
 
 	$classes = $manifest->getClassNames();
@@ -139,8 +155,10 @@ if($flush) {
 }
 
 $files = $collection->get('__CONFIG_FILES__');
-foreach($files as $file) {
-	require $file;
+if(is_array($files)) {
+	foreach($files as $file) {
+		require $file;
+	}
 }
 
 // Load template manifest

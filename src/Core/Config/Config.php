@@ -333,12 +333,12 @@ class Config {
 	}
 
 	public function update($class, $name, $val) {
-		// @todo update
+		// echo sprintf('Config->update() called on %s.%s', $class, $name) . '<br />';
 		return;
 	}
 
 	public function remove($class, $name, $key = null, $value = null) {
-		// @todo remove
+		// echo sprintf('Config->remove() called on %s.%s', $class, $name) . '<br />';;
 		return;
 	}
 

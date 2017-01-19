@@ -293,6 +293,10 @@ class DataObjectSchema {
 	 * @return array Map of fieldname to specification, similiar to {@link DataObject::$db}.
 	 */
 	public function databaseFields($class, $aggregated = true) {
+		if(!is_a($class, DataObject::class, true) || ($class == DataObject::class)) {
+			return array();
+		}
+
 		$class = ClassInfo::class_name($class);
 		if($class === DataObject::class) {
 			return [];
